@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="text-2xl font-bold mb-6 fade-in">Suppliers</h2>
+
+<form method="POST" action="/suppliers" class="bg-gray-900 rounded-xl p-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-3 border border-gray-800 fade-in">
+    <input name="name" placeholder="Supplier name" required class="bg-gray-800 rounded-lg px-3 py-2">
+    <input name="phone" placeholder="Phone" class="bg-gray-800 rounded-lg px-3 py-2">
+    <input name="email" placeholder="Email" class="bg-gray-800 rounded-lg px-3 py-2">
+    <input name="address" placeholder="Address" class="bg-gray-800 rounded-lg px-3 py-2">
+    <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 transition rounded-lg px-4 py-2 font-semibold md:col-span-2">+ Add Supplier</button>
+</form>
+
+<div class="space-y-2 fade-in">
+    {% for s in suppliers %}
+    <div class="card-hover bg-gray-900 rounded-xl p-4 flex items-center justify-between gap-3 border border-gray-800">
+        <div>
+            <div class="font-semibold">{{ s.name }}</div>
+            <div class="text-sm text-gray-400">{{ s.phone }}{% if s.email %} • {{ s.email }}{% endif %}{% if s.address %} • {{ s.address }}{% endif %}</div>
+        </div>
+        <a href="/supplier/delete/{{ s._id }}" onclick="return confirm('Delete supplier?')" class="bg-red-700 hover:bg-red-600 transition px-3 py-2 rounded-lg text-sm">Delete</a>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
