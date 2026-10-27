@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nimora POS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/print.css') }}">
+    <script>tailwind.config = { darkMode: 'class' }</script>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen">
+    <div class="flex flex-col md:flex-row">
+        <aside class="no-print md:w-56 bg-gray-900 p-4 space-y-2 md:min-h-screen transition-all">
+            <h1 class="text-xl font-bold text-white mb-6">Nimora <span class="text-emerald-400">POS</span></h1>
+            <a href="/" class="block px-3 py-2 rounded-lg hover:bg-gray-800 transition">🧾 Billing</a>
+            <a href="/items" class="block px-3 py-2 rounded-lg hover:bg-gray-800 transition">📦 Items</a>
+            <a href="/invoices" class="block px-3 py-2 rounded-lg hover:bg-gray-800 transition">📄 Invoices</a>
+        </aside>
+        <main class="flex-1 p-4 md:p-8">
+            {% with messages = get_flashed_messages() %}
+                {% for msg in messages %}
+                <div class="no-print bg-emerald-900 text-emerald-200 p-3 rounded mb-4 transition-all">{{ msg }}</div>
+                {% endfor %}
+            {% endwith %}
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</body>
+</html>
