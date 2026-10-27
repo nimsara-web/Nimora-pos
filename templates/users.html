@@ -1,25 +1,40 @@
 {% extends "base.html" %}
 {% block content %}
 <h2 class="text-2xl font-bold mb-6 fade-in">Users</h2>
+
 <form method="POST" action="/users" class="bg-gray-900 rounded-xl p-4 mb-6 grid grid-cols-1 md:grid-cols-3 gap-3 border border-gray-800 fade-in">
     <input name="username" placeholder="Username" required class="bg-gray-800 rounded-lg px-3 py-2">
-    <input name="password" type="password" placeholder="Password" required class="bg-gray-800 rounded-lg px-3 py-2">
+    <input name="password" type="password" placeholder="Password (min 6)" required minlength="6" class="bg-gray-800 rounded-lg px-3 py-2">
     <select name="role" class="bg-gray-800 rounded-lg px-3 py-2">
         <option value="staff">Staff</option>
         <option value="admin">Admin</option>
     </select>
     <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 transition rounded-lg px-4 py-2 font-semibold md:col-span-3">+ Add User</button>
 </form>
+
 <div class="space-y-2 fade-in">
     {% for u in users %}
-    <div class="bg-gray-900 rounded-xl p-4 flex justify-between items-center border border-gray-800">
-        <div>
-            <span class="font-semibold">{{ u.username }}</span>
-            <span class="text-sm text-gray-400 ml-2">{{ u.role }}</span>
+    <div class="bg-gray-900 rounded-xl p-4 border border-gray-800">
+        <div class="flex justify-between items-center flex-wrap gap-3">
+            <div>
+                <span class="font-semibold">{{ u.username }}</span>
+                <span class="text-xs px-2 py-0.5 rounded-full ml-2 {% if u.role == 'admin' %}bg-brand-900/50 text-brand-300{% else %}bg-gray-800 text-gray-400{% endif %}">
+                    {{ u.role }}
+                </span>
+            </div>
+            <div class="flex gap-2">
+                <button type="button" onclick="document.getElementById('reset-{{ u._id }}').classList.toggle('hidden')"
+                        class="bg-yellow-700 hover:bg-yellow-600 transition px-3 py-2 rounded-lg text-sm">Reset Password</button>
+                {% if u.username != 'admin' %}
+                <a href="/user/delete/{{ u._id }}" onclick="return confirm('Delete user?')" class="bg-red-700 hover:bg-red-600 transition px-3 py-2 rounded-lg text-sm">Delete</a>
+                {% endif %}
+            </div>
         </div>
-        {% if u.username != 'admin' %}
-        <a href="/user/delete/{{ u._id }}" onclick="return confirm('Delete user?')" class="bg-red-700 hover:bg-red-600 transition px-3 py-2 rounded-lg text-sm">Delete</a>
-        {% endif %}
+
+        <form method="POST" action="/user/reset-password/{{ u._id }}" id="reset-{{ u._id }}" class="hidden mt-3 flex gap-2">
+            <input name="new_password" type="password" placeholder="New password (min 6)" required minlength="6" class="flex-1 bg-gray-800 rounded-lg px-3 py-2 text-sm">
+            <button type="submit" class="bg-yellow-600 hover:bg-yellow-500 transition px-4 py-2 rounded-lg text-sm font-semibold">Set</button>
+        </form>
     </div>
     {% endfor %}
 </div>
