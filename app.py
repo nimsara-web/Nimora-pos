@@ -639,14 +639,18 @@ def purchases():
         except ValueError:
             flash('Invalid numbers')
             return redirect(url_for('purchases'))
+        item_name = request.form.get('item', '').strip()
+        if not item_name:
+            flash('Please select an item')
+            return redirect(url_for('purchases'))
         purchases_col.insert_one({
-            'item': request.form.get('item', '').strip(),
+            'item': item_name,
             'supplier': request.form.get('supplier', '').strip(),
             'quantity': qty,
             'total': total,
             'created_at': datetime.utcnow()
         })
-        it = items_col.find_one({'name': request.form.get('item', '').strip()})
+        it = items_col.find_one({'name': item_name})
         if it:
             items_col.update_one({'_id': it['_id']}, {'$inc': {'stock': qty}})
         flash('Purchase recorded and stock updated')
@@ -655,6 +659,70 @@ def purchases():
                            purchases=list(purchases_col.find().sort('created_at', -1)),
                            items=list(items_col.find().sort('name', 1)),
                            suppliers=list(suppliers_col.find()))
+
+
+@app.route('/purchase/edit/<pid>', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def edit_purchase(pid):
+    p = purchases_col.find_one({'_id': ObjectId(pid)})
+    if not p:
+        flash('Purchase not found')
+        return redirect(url_for('purchases'))
+
+    if request.method == 'POST':
+        try:
+            new_qty = int(request.form.get('quantity', 0))
+            new_total = float(request.form.get('total', 0))
+        except ValueError:
+            flash('Invalid numbers')
+            return redirect(url_for('edit_purchase', pid=pid))
+        new_item = request.form.get('item', '').strip()
+        new_supplier = request.form.get('supplier', '').strip()
+        old_item = p.get('item', '')
+        old_qty = p.get('quantity', 0)
+
+        # පරණ item එකෙන් පරණ qty අඩු කරන්න
+        old_it = items_col.find_one({'name': old_item})
+        if old_it:
+            items_col.update_one({'_id': old_it['_id']}, {'$inc': {'stock': -old_qty}})
+
+        # අලුත් item එකට අලුත් qty එකතු කරන්න
+        new_it = items_col.find_one({'name': new_item})
+        if new_it:
+            items_col.update_one({'_id': new_it['_id']}, {'$inc': {'stock': new_qty}})
+
+        purchases_col.update_one({'_id': ObjectId(pid)}, {'$set': {
+            'item': new_item,
+            'supplier': new_supplier,
+            'quantity': new_qty,
+            'total': new_total
+        }})
+        flash('Purchase updated and stock adjusted')
+        return redirect(url_for('purchases'))
+
+    return render_template('purchases.html',
+                           purchases=list(purchases_col.find().sort('created_at', -1)),
+                           items=list(items_col.find().sort('name', 1)),
+                           suppliers=list(suppliers_col.find()),
+                           edit_purchase=p)
+
+
+@app.route('/purchase/delete/<pid>')
+@login_required
+@admin_required
+def delete_purchase(pid):
+    p = purchases_col.find_one({'_id': ObjectId(pid)})
+    if not p:
+        flash('Purchase not found')
+        return redirect(url_for('purchases'))
+    # stock ආපහු අඩු කරන්න
+    it = items_col.find_one({'name': p.get('item', '')})
+    if it:
+        items_col.update_one({'_id': it['_id']}, {'$inc': {'stock': -p.get('quantity', 0)}})
+    purchases_col.delete_one({'_id': ObjectId(pid)})
+    flash(f"Purchase for {p.get('item', '')} deleted and stock adjusted")
+    return redirect(url_for('purchases'))
 
 
 # ================= EXPENSES =================
@@ -722,7 +790,6 @@ def delete_return(rid):
     if not ret:
         flash('Return not found')
         return redirect(url_for('returns'))
-    # stock ආපහු අඩු කරන්න (return එකේදී +1 වුනා නිසා)
     for it in ret.get('items', []):
         if it.get('item_id'):
             try:
