@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="text-2xl font-bold mb-6">📄 Invoices</h2>
+{% if invoices %}
+<div class="space-y-2">
+    {% for inv in invoices %}
+    <a href="/invoice/{{ inv._id }}" class="block bg-gray-900 rounded-xl p-4 hover:bg-gray-800 transition flex justify-between">
+        <span class="font-semibold">{{ inv.invoice_no }}</span>
+        <span class="text-gray-400 text-sm">{{ inv.created_at.strftime('%Y-%m-%d %H:%M') }} • Rs. {{ "%.2f"|format(inv.total) }}</span>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<p class="text-gray-400">තාම invoices නෑ.</p>
+{% endif %}
+{% endblock %}
