@@ -1,16 +1,21 @@
 {% extends "base.html" %}
 {% block content %}
-<h2 class="text-2xl font-bold mb-6">📄 Invoices</h2>
+<h2 class="text-2xl font-bold mb-4 fade-in">Invoices</h2>
+
+<form method="GET" action="/invoices" class="mb-4 fade-in">
+    <input name="q" value="{{ q }}" placeholder="Search invoice no / customer..." class="w-full bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 focus:outline-none focus:border-emerald-500 transition">
+</form>
+
 {% if invoices %}
-<div class="space-y-2">
+<div class="space-y-2 fade-in">
     {% for inv in invoices %}
-    <a href="/invoice/{{ inv._id }}" class="block bg-gray-900 rounded-xl p-4 hover:bg-gray-800 transition flex justify-between">
-        <span class="font-semibold">{{ inv.invoice_no }}</span>
+    <a href="/invoice/{{ inv._id }}" class="card-hover block bg-gray-900 rounded-xl p-4 hover:bg-gray-800 transition flex justify-between border border-gray-800">
+        <span class="font-semibold">{{ inv.invoice_no }}{% if inv.customer %} — {{ inv.customer }}{% endif %}</span>
         <span class="text-gray-400 text-sm">{{ inv.created_at.strftime('%Y-%m-%d %H:%M') }} • Rs. {{ "%.2f"|format(inv.total) }}</span>
     </a>
     {% endfor %}
 </div>
 {% else %}
-<p class="text-gray-400">තාම invoices නෑ.</p>
+<p class="text-gray-400">No invoices yet.</p>
 {% endif %}
 {% endblock %}
