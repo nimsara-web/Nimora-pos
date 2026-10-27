@@ -47,11 +47,13 @@
         <div class="text-lg font-bold">Total: Rs. {{ "%.2f"|format(inv.total) }}</div>
     </div>
 
-    <p class="text-center text-xs mt-6 text-gray-500">Thank you for your business!</p>
+    {% if inv.notes %}<p class="text-xs mt-3 text-gray-700">Note: {{ inv.notes }}</p>{% endif %}
+    <p class="text-center text-xs mt-6 text-gray-500">{{ settings.footer_note }}</p>
 </div>
 
 <div class="no-print mt-6 flex gap-3 justify-center fade-in">
-    <button onclick="window.print()" class="bg-emerald-600 hover:bg-emerald-500 transition px-6 py-3 rounded-xl font-semibold">Print / Save PDF</button>
+    <button onclick="window.print()" class="bg-emerald-600 hover:bg-emerald-500 transition px-6 py-3 rounded-xl font-semibold">Print</button>
+    <a href="/invoice/{{ inv._id }}/pdf" class="bg-blue-600 hover:bg-blue-500 transition px-6 py-3 rounded-xl font-semibold">Download PDF</a>
     <a href="/pos" class="bg-gray-800 hover:bg-gray-700 transition px-6 py-3 rounded-xl font-semibold">Back</a>
 </div>
 {% endblock %}
