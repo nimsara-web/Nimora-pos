@@ -6,16 +6,37 @@
     <input name="q" value="{{ q }}" placeholder="Search invoice no / customer..." class="w-full bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 focus:outline-none focus:border-emerald-500 transition">
 </form>
 
-{% if invoices %}
-<div class="space-y-2 fade-in">
-    {% for inv in invoices %}
-    <a href="/invoice/{{ inv._id }}" class="card-hover block bg-gray-900 rounded-xl p-4 hover:bg-gray-800 transition flex justify-between border border-gray-800">
-        <span class="font-semibold">{{ inv.invoice_no }}{% if inv.customer %} — {{ inv.customer }}{% endif %}</span>
-        <span class="text-gray-400 text-sm">{{ inv.created_at.strftime('%Y-%m-%d %H:%M') }} • Rs. {{ "%.2f"|format(inv.total) }}</span>
-    </a>
-    {% endfor %}
-</div>
-{% else %}
-<p class="text-gray-400">No invoices yet.</p>
-{% endif %}
+<form method="POST" action="/invoices/delete-test" id="bulkForm" class="fade-in">
+    <div class="flex gap-2 mb-3">
+        <button type="button" onclick="toggleAll()" class="bg-gray-700 hover:bg-gray-600 transition px-3 py-2 rounded-lg text-sm">Select All</button>
+        <button type="submit" onclick="return confirm('Delete selected invoices? Stock will be restored.')" class="bg-red-700 hover:bg-red-600 transition px-3 py-2 rounded-lg text-sm">Delete Selected (Test Orders)</button>
+    </div>
+
+    {% if invoices %}
+    <div class="space-y-2">
+        {% for inv in invoices %}
+        <div class="bg-gray-900 rounded-xl p-4 flex items-center justify-between gap-3 border border-gray-800 card-hover">
+            <div class="flex items-center gap-3 flex-1">
+                <input type="checkbox" name="inv_ids" value="{{ inv._id }}" class="inv-check w-4 h-4 accent-red-500">
+                <a href="/invoice/{{ inv._id }}" class="flex-1 flex justify-between hover:text-emerald-400 transition">
+                    <span class="font-semibold">{{ inv.invoice_no }}{% if inv.customer %} — {{ inv.customer }}{% endif %}</span>
+                    <span class="text-gray-400 text-sm">{{ inv.created_at.strftime('%Y-%m-%d %H:%M') }} • Rs. {{ "%.2f"|format(inv.total) }}</span>
+                </a>
+            </div>
+            <a href="/invoice/delete/{{ inv._id }}" onclick="return confirm('Delete this invoice? Stock will be restored.')" class="bg-red-700 hover:bg-red-600 transition px-3 py-2 rounded-lg text-xs">Delete</a>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-gray-400">No invoices yet.</p>
+    {% endif %}
+</form>
+
+<script>
+function toggleAll() {
+    const checks = document.querySelectorAll('.inv-check');
+    const allChecked = Array.from(checks).every(c => c.checked);
+    checks.forEach(c => c.checked = !allChecked);
+}
+</script>
 {% endblock %}
