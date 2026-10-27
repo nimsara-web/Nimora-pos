@@ -6,70 +6,273 @@
     <title>Nimora POS</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/print.css') }}">
-    <script>tailwind.config = { darkMode: 'class' }</script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#ecfdf5',
+                            400: '#34d399',
+                            500: '#10b981',
+                            600: '#059669',
+                            700: '#047857',
+                            900: '#064e3b',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-        .fade-in { animation: fadeIn 0.4s ease-out both; }
-        .card-hover { transition: transform 0.2s ease, box-shadow 0.2s ease; }
-        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(16,185,129,0.15); }
+        * { -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Inter', sans-serif; }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes slideInLeft {
+            from { opacity: 0; transform: translateX(-16px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.4); }
+            50% { box-shadow: 0 0 24px 4px rgba(16,185,129,0.15); }
+        }
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        .fade-in { animation: fadeInUp 0.45s cubic-bezier(0.22,1,0.36,1) both; }
+        .slide-in { animation: slideInLeft 0.35s ease-out both; }
+        .card-hover {
+            transition: transform 0.25s cubic-bezier(0.22,1,0.36,1),
+                        box-shadow 0.25s ease,
+                        border-color 0.25s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 32px rgba(16,185,129,0.12);
+            border-color: rgba(16,185,129,0.4);
+        }
+        .nav-link {
+            position: relative;
+            transition: all 0.2s ease;
+        }
+        .nav-link::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 50%;
+            transform: translateY(-50%) scaleY(0);
+            width: 3px; height: 60%;
+            background: linear-gradient(to bottom, #34d399, #059669);
+            border-radius: 0 4px 4px 0;
+            transition: transform 0.2s ease;
+        }
+        .nav-link:hover::before, .nav-link.active::before { transform: translateY(-50%) scaleY(1); }
+        .nav-link:hover, .nav-link.active {
+            background: linear-gradient(90deg, rgba(16,185,129,0.15), rgba(16,185,129,0.02));
+            color: #34d399;
+        }
+        .glass {
+            background: rgba(17, 24, 39, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+        .gradient-text {
+            background: linear-gradient(135deg, #34d399, #10b981, #059669);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .glow-dot {
+            width: 8px; height: 8px;
+            background: #10b981;
+            border-radius: 50%;
+            animation: pulseGlow 2s infinite;
+        }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #374151; }
+
+        /* Page-level ambient background */
+        .ambient-bg {
+            position: fixed; inset: 0; z-index: -1; pointer-events: none;
+            background:
+                radial-gradient(circle at 15% 20%, rgba(16,185,129,0.06), transparent 40%),
+                radial-gradient(circle at 85% 80%, rgba(5,150,105,0.05), transparent 40%);
+        }
     </style>
 </head>
-<body class="bg-gray-950 text-gray-100 min-h-screen">
-    <div class="flex flex-col md:flex-row">
-        <!-- Sidebar -->
-        <aside id="sidebar" class="no-print md:w-60 bg-gray-900/80 backdrop-blur p-4 space-y-1 md:min-h-screen border-r border-gray-800 transition-all duration-300">
-            <div class="flex items-center justify-between mb-6 px-2">
-                <h1 class="text-xl font-bold">Nimora <span class="text-emerald-400">POS</span></h1>
-                <button onclick="document.getElementById('sidebar').classList.toggle('hidden')" class="md:hidden text-gray-400 hover:text-white">✕</button>
+<body class="bg-gray-950 text-gray-100 min-h-screen antialiased">
+    <div class="ambient-bg"></div>
+
+    <div class="flex min-h-screen">
+        <!-- ============ SIDEBAR ============ -->
+        <aside id="sidebar"
+               class="no-print fixed md:sticky top-0 z-40 h-screen w-64 glass border-r border-gray-800/80 flex flex-col
+                      transition-transform duration-300 ease-out -translate-x-full md:translate-x-0">
+            <!-- Brand -->
+            <div class="flex items-center justify-between px-5 h-16 border-b border-gray-800/80">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-400 to-brand-700 flex items-center justify-center shadow-lg shadow-brand-900/40">
+                        <span class="text-white font-extrabold text-sm">N</span>
+                    </div>
+                    <div>
+                        <h1 class="text-base font-bold leading-tight">Nimora</h1>
+                        <p class="text-[10px] uppercase tracking-widest text-brand-400 font-semibold">POS System</p>
+                    </div>
+                </div>
+                <button onclick="toggleSidebar()" class="md:hidden text-gray-500 hover:text-white transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
             </div>
 
-            <a href="/" class="block px-3 py-2 rounded-lg hover:bg-gray-800 transition">📊 Dashboard</a>
-            <a href="/pos" class="block px-3 py-2 rounded-lg hover:bg-gray-800 transition">🧾 Billing</a>
-            <a href="/items" class="block px-3 py-2 rounded-lg hover:bg-gray-800 transition">📦 Items</a>
-            <a href="/customers" class="block px-3 py-2 rounded-lg hover:bg-gray-800 transition">👥 Customers</a>
-            <a href="/suppliers" class="block px-3 py-2 rounded-lg hover:bg-gray-800 transition">🚚 Suppliers</a>
-            <a href="/purchases" class="block px-3 py-2 rounded-lg hover:bg-gray-800 transition">🛒 Purchases</a>
-            <a href="/invoices" class="block px-3 py-2 rounded-lg hover:bg-gray-800 transition">📄 Invoices</a>
-            <a href="/returns" class="block px-3 py-2 rounded-lg hover:bg-gray-800 transition">↩️ Returns</a>
-            <a href="/expenses" class="block px-3 py-2 rounded-lg hover:bg-gray-800 transition">💸 Expenses</a>
-            <a href="/reports" class="block px-3 py-2 rounded-lg hover:bg-gray-800 transition">📈 Reports</a>
-            <a href="/users" class="block px-3 py-2 rounded-lg hover:bg-gray-800 transition">🔐 Users</a>
-            <a href="/settings" class="block px-3 py-2 rounded-lg hover:bg-gray-800 transition">⚙️ Settings</a>
-            <a href="/backup" class="block px-3 py-2 rounded-lg hover:bg-gray-800 transition">💾 Backup</a>
+            <!-- Nav -->
+            <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
+                <p class="px-3 pt-1 pb-2 text-[10px] uppercase tracking-wider text-gray-600 font-semibold">Main</p>
+                <a href="/" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-300">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+                    <span>Dashboard</span>
+                </a>
+                <a href="/pos" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-300">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    <span>Billing</span>
+                </a>
 
-            <div class="border-t border-gray-800 mt-3 pt-3">
-                <div class="px-3 py-1 text-xs text-gray-500">
-                    Logged in as <span class="text-emerald-400 font-semibold">{{ session.get('user', 'guest') }}</span>
-                    {% if session.get('role') %}({{ session.get('role') }}){% endif %}
+                <p class="px-3 pt-4 pb-2 text-[10px] uppercase tracking-wider text-gray-600 font-semibold">Inventory</p>
+                <a href="/items" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-300">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                    <span>Items</span>
+                </a>
+                <a href="/purchases" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-300">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                    <span>Purchases</span>
+                </a>
+                <a href="/suppliers" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-300">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1"/></svg>
+                    <span>Suppliers</span>
+                </a>
+
+                <p class="px-3 pt-4 pb-2 text-[10px] uppercase tracking-wider text-gray-600 font-semibold">Sales</p>
+                <a href="/customers" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-300">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                    <span>Customers</span>
+                </a>
+                <a href="/invoices" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-300">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    <span>Invoices</span>
+                </a>
+                <a href="/returns" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-300">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg>
+                    <span>Returns</span>
+                </a>
+
+                <p class="px-3 pt-4 pb-2 text-[10px] uppercase tracking-wider text-gray-600 font-semibold">Finance</p>
+                <a href="/expenses" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-300">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span>Expenses</span>
+                </a>
+                <a href="/reports" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-300">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                    <span>Reports</span>
+                </a>
+
+                <p class="px-3 pt-4 pb-2 text-[10px] uppercase tracking-wider text-gray-600 font-semibold">System</p>
+                <a href="/users" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-300">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                    <span>Users</span>
+                </a>
+                <a href="/settings" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-300">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    <span>Settings</span>
+                </a>
+                <a href="/backup" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-300">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    <span>Backup</span>
+                </a>
+            </nav>
+
+            <!-- User footer -->
+            <div class="border-t border-gray-800/80 p-3">
+                <div class="flex items-center gap-3 px-2 py-2 rounded-lg bg-gray-900/60">
+                    <div class="w-9 h-9 rounded-full bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white font-bold text-sm shrink-0">
+                        {{ (session.get('user','guest') or 'G')[0]|upper }}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-semibold truncate">{{ session.get('user', 'guest') }}</p>
+                        <p class="text-[10px] uppercase tracking-wider text-brand-400 font-semibold">{{ session.get('role', 'guest') }}</p>
+                    </div>
+                    <a href="/logout" title="Logout" class="text-gray-500 hover:text-red-400 transition">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                    </a>
                 </div>
-                <a href="/logout" class="block px-3 py-2 rounded-lg hover:bg-red-900/40 transition text-red-400">🚪 Logout</a>
             </div>
         </aside>
 
-        <!-- Main -->
-        <div class="flex-1 flex flex-col">
-            <!-- Mobile topbar -->
-            <div class="no-print md:hidden bg-gray-900 border-b border-gray-800 p-3 flex items-center justify-between">
-                <button onclick="document.getElementById('sidebar').classList.toggle('hidden')" class="text-emerald-400 font-semibold">☰ Menu</button>
-                <span class="text-sm text-gray-400">{{ session.get('user', '') }}</span>
-            </div>
+        <!-- Backdrop for mobile -->
+        <div id="backdrop" onclick="toggleSidebar()" class="fixed inset-0 bg-black/60 z-30 hidden md:hidden"></div>
 
-            <main class="flex-1 p-4 md:p-8">
+        <!-- ============ MAIN ============ -->
+        <div class="flex-1 flex flex-col min-w-0">
+            <!-- Topbar -->
+            <header class="no-print sticky top-0 z-20 h-16 glass border-b border-gray-800/80 flex items-center justify-between px-4 md:px-6">
+                <div class="flex items-center gap-3">
+                    <button onclick="toggleSidebar()" class="md:hidden text-gray-400 hover:text-white transition">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                    </button>
+                    <div class="hidden md:flex items-center gap-2">
+                        <div class="glow-dot"></div>
+                        <span class="text-xs text-gray-400">System online</span>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <span class="hidden sm:inline text-xs text-gray-500">{{ session.get('user', '') }}</span>
+                    <a href="/pos" class="bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-400 hover:to-brand-500 transition text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-lg shadow-brand-900/30">
+                        + New Bill
+                    </a>
+                </div>
+            </header>
+
+            <!-- Content -->
+            <main class="flex-1 p-4 md:p-6 lg:p-8">
                 {% with messages = get_flashed_messages() %}
                     {% for msg in messages %}
-                    <div class="no-print fade-in bg-emerald-900/70 border border-emerald-700 text-emerald-200 p-3 rounded-lg mb-4">{{ msg }}</div>
+                    <div class="no-print fade-in bg-brand-900/40 border border-brand-700/60 text-brand-200 p-3 rounded-xl mb-4 flex items-center gap-2">
+                        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <span class="text-sm">{{ msg }}</span>
+                    </div>
                     {% endfor %}
                 {% endwith %}
                 {% block content %}{% endblock %}
             </main>
+
+            <footer class="no-print text-center text-xs text-gray-600 py-4 border-t border-gray-900">
+                Nimora POS &middot; {{ now_year if now_year else '2026' }}
+            </footer>
         </div>
     </div>
 
     <script>
-        // Mobile sidebar: default hidden on small screens
-        if (window.innerWidth < 768) {
-            document.getElementById('sidebar').classList.add('hidden');
+        function toggleSidebar() {
+            const sb = document.getElementById('sidebar');
+            const bd = document.getElementById('backdrop');
+            sb.classList.toggle('-translate-x-full');
+            bd.classList.toggle('hidden');
         }
+        // Highlight current nav
+        document.querySelectorAll('.nav-link').forEach(a => {
+            if (a.getAttribute('href') === window.location.pathname) a.classList.add('active');
+        });
     </script>
 </body>
 </html>
