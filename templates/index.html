@@ -21,7 +21,12 @@
     </div>
 
     <div class="bg-gray-900 rounded-xl p-4 grid grid-cols-1 md:grid-cols-3 gap-3 border border-gray-800">
-        <input name="customer" placeholder="Customer name (optional)" class="bg-gray-800 rounded-lg px-3 py-2">
+        <select name="customer_id" class="bg-gray-800 rounded-lg px-3 py-2">
+            <option value="">— No customer (walk-in) —</option>
+            {% for c in customers %}
+            <option value="{{ c._id }}">{{ c.name }}{% if c.phone %} ({{ c.phone }}){% endif %}</option>
+            {% endfor %}
+        </select>
         <select name="payment" class="bg-gray-800 rounded-lg px-3 py-2">
             <option>Cash</option>
             <option>Card</option>
