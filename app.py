@@ -3,6 +3,7 @@ import io
 import csv
 import json
 import secrets
+import urllib.request
 from datetime import datetime, timedelta
 from functools import wraps
 from flask import (Flask, render_template, request, redirect, url_for, flash,
@@ -12,6 +13,8 @@ from bson.objectid import ObjectId
 from dotenv import load_dotenv
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
+from reportlab.lib import colors
 from werkzeug.security import generate_password_hash, check_password_hash
 
 load_dotenv()
@@ -54,7 +57,6 @@ def get_settings():
         defaults['_id'] = 'main'
         settings_col.insert_one(defaults)
         return defaults
-    # පරණ document එකට නැති fields එකතු කරන්න
     missing = {k: v for k, v in defaults.items() if k not in s}
     if missing:
         settings_col.update_one({'_id': 'main'}, {'$set': missing})
@@ -141,7 +143,8 @@ def users():
 @login_required
 @admin_required
 def delete_user(uid):
-    if str(uid) == 'admin':
+    u = users_col.find_one({'_id': ObjectId(uid)})
+    if u and u['username'] == 'admin':
         flash('Cannot delete admin')
         return redirect(url_for('users'))
     users_col.delete_one({'_id': ObjectId(uid)})
@@ -163,7 +166,6 @@ def dashboard():
     week_ago = today - timedelta(days=7)
     week_sales = sum(i['total'] for i in invoices_col.find({'created_at': {'$gte': week_ago}}))
 
-    # profit
     profit_today = 0
     for inv in today_invoices:
         for it in inv['items']:
@@ -216,19 +218,29 @@ def create_invoice():
     discount = float(request.form.get('discount', 0) or 0)
     tax_rate = float(request.form.get('tax_rate', 0) or 0)
     customer = request.form.get('customer', '').strip()
+    customer_phone = ''
+    customer_id = request.form.get('customer_id', '').strip()
+    if customer_id:
+        try:
+            cust = customers_col.find_one({'_id': ObjectId(customer_id)})
+            if cust:
+                customer = cust['name']
+                customer_phone = cust.get('phone', '')
+        except Exception:
+            pass
     payment = request.form.get('payment', 'Cash')
     notes = request.form.get('notes', '').strip()
 
     tax_amount = (subtotal - discount) * tax_rate / 100
     total = subtotal - discount + tax_amount
     invoice_no = f"NIM-{secrets.token_hex(3).upper()}"
-
     profit = sum((i['price'] - i.get('cost', 0)) for i in items) - discount
 
     invoice_doc = {
         'invoice_no': invoice_no,
         'created_at': datetime.utcnow(),
         'customer': customer,
+        'customer_phone': customer_phone,
         'payment': payment,
         'notes': notes,
         'subtotal': subtotal,
@@ -271,43 +283,96 @@ def invoice_pdf(inv_id):
     buf = io.BytesIO()
     p = canvas.Canvas(buf, pagesize=A4)
     width, height = A4
-    p.setFont('Helvetica-Bold', 18)
-    p.drawString(50, height - 50, settings.get('business_name', 'Nimora Brand'))
+
+    # Header bar
+    p.setFillColor(colors.HexColor('#064e3b'))
+    p.rect(0, height - 110, width, 110, fill=1, stroke=0)
+
+    # Logo
+    logo_y = height - 95
+    if settings.get('logo_url'):
+        try:
+            img_data = urllib.request.urlopen(settings['logo_url'], timeout=5).read()
+            img = ImageReader(io.BytesIO(img_data))
+            p.drawImage(img, 40, logo_y, width=70, height=70,
+                        preserveAspectRatio=True, mask='auto')
+        except Exception:
+            pass
+
+    # Business info (white text)
+    p.setFillColor(colors.white)
+    p.setFont('Helvetica-Bold', 20)
+    p.drawString(130, height - 50, settings.get('business_name', 'Nimora Brand'))
     p.setFont('Helvetica', 10)
-    p.drawString(50, height - 70, f"Tel: {settings.get('phone', '')}")
+    p.drawString(130, height - 68, f"Tel: {settings.get('phone', '')}")
     if settings.get('address'):
-        p.drawString(50, height - 85, settings['address'])
-    p.setFont('Helvetica-Bold', 12)
-    p.drawString(50, height - 120, f"Invoice: {inv['invoice_no']}")
-    p.drawString(50, height - 135, f"Date: {inv['created_at'].strftime('%Y-%m-%d %H:%M')}")
+        p.drawString(130, height - 82, settings['address'])
+
+    # Invoice meta
+    p.setFillColor(colors.black)
+    p.setFont('Helvetica-Bold', 13)
+    p.drawString(40, height - 140, f"Invoice: {inv['invoice_no']}")
+    p.setFont('Helvetica', 10)
+    p.drawString(40, height - 158, f"Date: {inv['created_at'].strftime('%Y-%m-%d %H:%M')}")
     if inv.get('customer'):
-        p.drawString(50, height - 150, f"Customer: {inv['customer']}")
-    p.drawString(50, height - 165, f"Payment: {inv['payment']}")
-    y = height - 200
+        p.drawString(40, height - 172, f"Customer: {inv['customer']}")
+    if inv.get('customer_phone'):
+        p.drawString(40, height - 186, f"Phone: {inv['customer_phone']}")
+    p.drawString(40, height - (200 if inv.get('customer_phone') else 186),
+                 f"Payment: {inv.get('payment', 'Cash')}")
+
+    # Table header
+    y = height - 230
+    p.setFillColor(colors.HexColor('#064e3b'))
+    p.rect(40, y - 4, width - 80, 22, fill=1, stroke=0)
+    p.setFillColor(colors.white)
     p.setFont('Helvetica-Bold', 11)
     p.drawString(50, y, "Item")
-    p.drawString(400, y, "Price")
-    y -= 15
+    p.drawRightString(width - 50, y, "Price")
+
+    # Table rows
+    p.setFillColor(colors.black)
     p.setFont('Helvetica', 10)
-    for it in inv['items']:
+    y -= 28
+    for idx, it in enumerate(inv['items']):
+        if idx % 2 == 0:
+            p.setFillColor(colors.HexColor('#f3f4f6'))
+            p.rect(40, y - 6, width - 80, 20, fill=1, stroke=0)
+        p.setFillColor(colors.black)
         p.drawString(50, y, it['name'][:60])
-        p.drawString(400, y, f"Rs. {it['price']:.2f}")
-        y -= 15
+        p.drawRightString(width - 50, y, f"Rs. {it['price']:.2f}")
+        y -= 22
+        if y < 150:
+            p.showPage()
+            y = height - 80
+
+    # Totals
     y -= 10
-    p.line(50, y, width - 50, y)
-    y -= 20
-    p.drawString(350, y, f"Subtotal: Rs. {inv['subtotal']:.2f}")
-    y -= 15
+    p.setStrokeColor(colors.HexColor('#064e3b'))
+    p.line(40, y, width - 40, y)
+    y -= 22
+    p.setFont('Helvetica', 11)
+    p.drawRightString(width - 50, y, f"Subtotal: Rs. {inv['subtotal']:.2f}")
+    y -= 16
     if inv.get('discount'):
-        p.drawString(350, y, f"Discount: -Rs. {inv['discount']:.2f}")
-        y -= 15
+        p.setFillColor(colors.HexColor('#dc2626'))
+        p.drawRightString(width - 50, y, f"Discount: -Rs. {inv['discount']:.2f}")
+        y -= 16
+        p.setFillColor(colors.black)
     if inv.get('tax_amount'):
-        p.drawString(350, y, f"Tax ({inv['tax_rate']}%): Rs. {inv['tax_amount']:.2f}")
-        y -= 15
-    p.setFont('Helvetica-Bold', 12)
-    p.drawString(350, y, f"Total: Rs. {inv['total']:.2f}")
+        p.drawRightString(width - 50, y, f"Tax ({inv['tax_rate']}%): Rs. {inv['tax_amount']:.2f}")
+        y -= 16
+    p.setFont('Helvetica-Bold', 14)
+    p.setFillColor(colors.HexColor('#064e3b'))
+    p.drawRightString(width - 50, y - 6, f"Total: Rs. {inv['total']:.2f}")
+
+    # Footer
+    p.setFillColor(colors.black)
     p.setFont('Helvetica-Oblique', 9)
-    p.drawString(50, 50, settings.get('footer_note', ''))
+    p.drawCentredString(width / 2, 60, settings.get('footer_note', 'Thank you for your business!'))
+    p.setFont('Helvetica', 8)
+    p.drawCentredString(width / 2, 45, f"{settings.get('business_name', '')} • {settings.get('phone', '')}")
+
     p.showPage()
     p.save()
     buf.seek(0)
@@ -347,6 +412,53 @@ def invoices_list():
         ]}
     invs = list(invoices_col.find(query).sort('created_at', -1).limit(200))
     return render_template('invoices_list.html', invoices=invs, q=q)
+
+
+@app.route('/invoice/delete/<inv_id>')
+@login_required
+@admin_required
+def delete_invoice(inv_id):
+    inv = invoices_col.find_one({'_id': ObjectId(inv_id)})
+    if not inv:
+        flash('Invoice not found')
+        return redirect(url_for('invoices_list'))
+    for it in inv.get('items', []):
+        if it.get('item_id'):
+            try:
+                items_col.update_one({'_id': ObjectId(it['item_id'])}, {'$inc': {'stock': 1}})
+            except Exception:
+                pass
+    invoices_col.delete_one({'_id': ObjectId(inv_id)})
+    flash(f"Invoice {inv['invoice_no']} deleted and stock restored")
+    return redirect(url_for('invoices_list'))
+
+
+@app.route('/invoices/delete-test', methods=['POST'])
+@login_required
+@admin_required
+def delete_test_invoices():
+    ids = request.form.getlist('inv_ids')
+    if not ids:
+        flash('No invoices selected')
+        return redirect(url_for('invoices_list'))
+    count = 0
+    for iid in ids:
+        try:
+            inv = invoices_col.find_one({'_id': ObjectId(iid)})
+            if not inv:
+                continue
+            for it in inv.get('items', []):
+                if it.get('item_id'):
+                    try:
+                        items_col.update_one({'_id': ObjectId(it['item_id'])}, {'$inc': {'stock': 1}})
+                    except Exception:
+                        pass
+            invoices_col.delete_one({'_id': ObjectId(iid)})
+            count += 1
+        except Exception:
+            pass
+    flash(f"{count} invoices deleted and stock restored")
+    return redirect(url_for('invoices_list'))
 
 
 # ================= ITEMS =================
@@ -483,7 +595,6 @@ def purchases():
             'total': total,
             'created_at': datetime.utcnow()
         })
-        # stock increase
         it = items_col.find_one({'name': request.form.get('item', '').strip()})
         if it:
             items_col.update_one({'_id': it['_id']}, {'$inc': {'stock': qty}})
