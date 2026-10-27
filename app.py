@@ -38,21 +38,27 @@ purchases_col = db.purchases
 
 # ================= HELPERS =================
 def get_settings():
+    defaults = {
+        'business_name': os.environ.get('BUSINESS_NAME', 'Nimora Brand'),
+        'phone': os.environ.get('BUSINESS_PHONE', '0784280074'),
+        'logo_url': os.environ.get('LOGO_URL', ''),
+        'address': '',
+        'tax_rate': 0,
+        'currency': 'Rs.',
+        'footer_note': 'Thank you for your business!',
+        'low_stock_threshold': 5,
+        'whatsapp_country': '94'
+    }
     s = settings_col.find_one({'_id': 'main'})
     if not s:
-        s = {
-            '_id': 'main',
-            'business_name': os.environ.get('BUSINESS_NAME', 'Nimora Brand'),
-            'phone': os.environ.get('BUSINESS_PHONE', '0784280074'),
-            'logo_url': os.environ.get('LOGO_URL', ''),
-            'address': '',
-            'tax_rate': 0,
-            'currency': 'Rs.',
-            'footer_note': 'Thank you for your business!',
-            'low_stock_threshold': 5,
-            'whatsapp_country': '94'
-        }
-        settings_col.insert_one(s)
+        defaults['_id'] = 'main'
+        settings_col.insert_one(defaults)
+        return defaults
+    # පරණ document එකට නැති fields එකතු කරන්න
+    missing = {k: v for k, v in defaults.items() if k not in s}
+    if missing:
+        settings_col.update_one({'_id': 'main'}, {'$set': missing})
+        s.update(missing)
     return s
 
 
@@ -151,7 +157,8 @@ def dashboard():
     today_invoices = list(invoices_col.find({'created_at': {'$gte': today}}))
     today_sales = sum(i['total'] for i in today_invoices)
     settings = get_settings()
-    low_stock = list(items_col.find({'stock': {'$lte': settings['low_stock_threshold']}}).limit(5))
+    threshold = settings.get('low_stock_threshold', 5)
+    low_stock = list(items_col.find({'stock': {'$lte': threshold}}).limit(5))
     recent = list(invoices_col.find().sort('created_at', -1).limit(5))
     week_ago = today - timedelta(days=7)
     week_sales = sum(i['total'] for i in invoices_col.find({'created_at': {'$gte': week_ago}}))
@@ -265,9 +272,9 @@ def invoice_pdf(inv_id):
     p = canvas.Canvas(buf, pagesize=A4)
     width, height = A4
     p.setFont('Helvetica-Bold', 18)
-    p.drawString(50, height - 50, settings['business_name'])
+    p.drawString(50, height - 50, settings.get('business_name', 'Nimora Brand'))
     p.setFont('Helvetica', 10)
-    p.drawString(50, height - 70, f"Tel: {settings['phone']}")
+    p.drawString(50, height - 70, f"Tel: {settings.get('phone', '')}")
     if settings.get('address'):
         p.drawString(50, height - 85, settings['address'])
     p.setFont('Helvetica-Bold', 12)
@@ -315,16 +322,16 @@ def invoice_whatsapp(inv_id):
     if not inv:
         return redirect(url_for('dashboard'))
     s = get_settings()
-    lines = [f"*{s['business_name']}*", f"Invoice: {inv['invoice_no']}",
+    lines = [f"*{s.get('business_name', 'Nimora Brand')}*", f"Invoice: {inv['invoice_no']}",
              f"Date: {inv['created_at'].strftime('%Y-%m-%d')}"]
     for it in inv['items']:
         lines.append(f"- {it['name']}: Rs.{it['price']:.2f}")
     lines.append(f"*Total: Rs.{inv['total']:.2f}*")
-    lines.append(s['footer_note'])
+    lines.append(s.get('footer_note', ''))
     msg = '\n'.join(lines)
     phone = inv.get('customer_phone', '')
     if phone.startswith('0'):
-        phone = s['whatsapp_country'] + phone[1:]
+        phone = s.get('whatsapp_country', '94') + phone[1:]
     return redirect(f"https://wa.me/{phone}?text=" + msg.replace('\n', '%0A').replace(' ', '%20'))
 
 
@@ -615,12 +622,12 @@ def settings():
             flash('Invalid numbers')
             return redirect(url_for('settings'))
         settings_col.update_one({'_id': 'main'}, {'$set': {
-            'business_name': request.form.get('business_name', s['business_name']),
-            'phone': request.form.get('phone', s['phone']),
-            'logo_url': request.form.get('logo_url', s['logo_url']),
+            'business_name': request.form.get('business_name', s.get('business_name', 'Nimora Brand')),
+            'phone': request.form.get('phone', s.get('phone', '')),
+            'logo_url': request.form.get('logo_url', s.get('logo_url', '')),
             'address': request.form.get('address', ''),
             'tax_rate': tax_rate,
-            'currency': request.form.get('currency', 'Rs.'),
+            'currency': request.form.get('currency', s.get('currency', 'Rs.')),
             'footer_note': request.form.get('footer_note', ''),
             'low_stock_threshold': low_stock,
             'whatsapp_country': request.form.get('whatsapp_country', '94')
