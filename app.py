@@ -343,7 +343,8 @@ def invoice_pdf(inv_id):
     p = canvas.Canvas(buf, pagesize=A4)
     width, height = A4
 
-    p.setFillColor(colors.HexColor('#064e3b'))
+    # Blue header bar
+    p.setFillColor(colors.HexColor('#1e3a8a'))
     p.rect(0, height - 110, width, 110, fill=1, stroke=0)
 
     logo_y = height - 95
@@ -376,20 +377,22 @@ def invoice_pdf(inv_id):
     p.drawString(40, height - (200 if inv.get('customer_phone') else 186),
                  f"Payment: {inv.get('payment', 'Cash')}")
 
+    # Blue table header
     y = height - 230
-    p.setFillColor(colors.HexColor('#064e3b'))
+    p.setFillColor(colors.HexColor('#1e3a8a'))
     p.rect(40, y - 4, width - 80, 22, fill=1, stroke=0)
     p.setFillColor(colors.white)
     p.setFont('Helvetica-Bold', 11)
     p.drawString(50, y, "Item")
     p.drawRightString(width - 50, y, "Price")
 
+    # Light blue alternating rows
     p.setFillColor(colors.black)
     p.setFont('Helvetica', 10)
     y -= 28
     for idx, it in enumerate(inv['items']):
         if idx % 2 == 0:
-            p.setFillColor(colors.HexColor('#f3f4f6'))
+            p.setFillColor(colors.HexColor('#eff6ff'))
             p.rect(40, y - 6, width - 80, 20, fill=1, stroke=0)
         p.setFillColor(colors.black)
         p.drawString(50, y, it['name'][:60])
@@ -399,8 +402,9 @@ def invoice_pdf(inv_id):
             p.showPage()
             y = height - 80
 
+    # Blue totals line
     y -= 10
-    p.setStrokeColor(colors.HexColor('#064e3b'))
+    p.setStrokeColor(colors.HexColor('#1e3a8a'))
     p.line(40, y, width - 40, y)
     y -= 22
     p.setFont('Helvetica', 11)
@@ -415,7 +419,7 @@ def invoice_pdf(inv_id):
         p.drawRightString(width - 50, y, f"Tax ({inv['tax_rate']}%): Rs. {inv['tax_amount']:.2f}")
         y -= 16
     p.setFont('Helvetica-Bold', 14)
-    p.setFillColor(colors.HexColor('#064e3b'))
+    p.setFillColor(colors.HexColor('#1e3a8a'))
     p.drawRightString(width - 50, y - 6, f"Total: Rs. {inv['total']:.2f}")
 
     p.setFillColor(colors.black)
@@ -682,12 +686,10 @@ def edit_purchase(pid):
         old_item = p.get('item', '')
         old_qty = p.get('quantity', 0)
 
-        # පරණ item එකෙන් පරණ qty අඩු කරන්න
         old_it = items_col.find_one({'name': old_item})
         if old_it:
             items_col.update_one({'_id': old_it['_id']}, {'$inc': {'stock': -old_qty}})
 
-        # අලුත් item එකට අලුත් qty එකතු කරන්න
         new_it = items_col.find_one({'name': new_item})
         if new_it:
             items_col.update_one({'_id': new_it['_id']}, {'$inc': {'stock': new_qty}})
@@ -716,7 +718,6 @@ def delete_purchase(pid):
     if not p:
         flash('Purchase not found')
         return redirect(url_for('purchases'))
-    # stock ආපහු අඩු කරන්න
     it = items_col.find_one({'name': p.get('item', '')})
     if it:
         items_col.update_one({'_id': it['_id']}, {'$inc': {'stock': -p.get('quantity', 0)}})
