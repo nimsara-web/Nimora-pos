@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nimora POS - Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config = { darkMode: 'class' }</script>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen flex items-center justify-center p-4">
+    <div class="bg-gray-900 rounded-2xl p-8 w-full max-w-sm border border-gray-800">
+        <h1 class="text-2xl font-bold mb-6 text-center">Nimora <span class="text-emerald-400">POS</span></h1>
+        {% with messages = get_flashed_messages() %}
+            {% for msg in messages %}
+            <div class="bg-red-900/70 border border-red-700 text-red-200 p-2 rounded-lg mb-3 text-sm">{{ msg }}</div>
+            {% endfor %}
+        {% endwith %}
+        <form method="POST" action="/login" class="space-y-3">
+            <input name="username" placeholder="Username" required class="w-full bg-gray-800 rounded-lg px-3 py-2">
+            <input name="password" type="password" placeholder="Password" required class="w-full bg-gray-800 rounded-lg px-3 py-2">
+            <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 transition rounded-lg px-4 py-2 font-semibold">Login</button>
+        </form>
+        <p class="text-xs text-gray-500 mt-4 text-center">Default: admin / admin123</p>
+    </div>
+</body>
+</html>
