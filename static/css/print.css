@@ -1,0 +1,6 @@
+@media print {
+    body { background: white !important; color: black !important; }
+    .no-print { display: none !important; }
+    .invoice-box { box-shadow: none !important; border: none !important; }
+    a { color: black !important; text-decoration: none !important; }
+}
