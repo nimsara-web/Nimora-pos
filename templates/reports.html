@@ -10,4 +10,22 @@
 
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 fade-in">
     <div class="bg-gradient-to-br from-emerald-900 to-gray-900 rounded-2xl p-5 border border-emerald-800">
-        <div class="text-sm text
+        <div class="text-sm text-gray-400">Total Sales</div>
+        <div class="text-3xl font-bold text-emerald-400 mt-1">Rs. {{ "%.2f"|format(total) }}</div>
+    </div>
+    <div class="bg-gray-900 rounded-2xl p-5 border border-gray-800">
+        <div class="text-sm text-gray-400">Invoices</div>
+        <div class="text-3xl font-bold mt-1">{{ count }}</div>
+    </div>
+</div>
+
+<div class="bg-gray-900 rounded-2xl p-5 border border-gray-800 fade-in">
+    <h3 class="font-semibold mb-3">Top Selling Items</h3>
+    {% for name, data in item_summary %}
+    <div class="flex justify-between py-2 border-b border-gray-800 last:border-0">
+        <span>{{ name }} <span class="text-gray-500 text-sm">x{{ data.qty }}</span></span>
+        <span class="text-emerald-400">Rs. {{ "%.2f"|format(data.total) }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
