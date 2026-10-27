@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="text-2xl font-bold mb-6 fade-in">Expenses</h2>
+<div class="bg-gradient-to-br from-red-900 to-gray-900 rounded-2xl p-5 mb-6 border border-red-800 fade-in">
+    <div class="text-sm text-gray-300">Total Expenses</div>
+    <div class="text-3xl font-bold text-red-400 mt-1">Rs. {{ "%.2f"|format(total) }}</div>
+</div>
+<form method="POST" action="/expenses" class="bg-gray-900 rounded-xl p-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-3 border border-gray-800 fade-in">
+    <input name="title" placeholder="Expense title" required class="bg-gray-800 rounded-lg px-3 py-2">
+    <select name="category" class="bg-gray-800 rounded-lg px-3 py-2">
+        <option>Rent</option><option>Salary</option><option>Utilities</option>
+        <option>Transport</option><option>Other</option>
+    </select>
+    <input name="amount" type="number" step="0.01" placeholder="Amount" required class="bg-gray-800 rounded-lg px-3 py-2">
+    <input name="notes" placeholder="Notes" class="bg-gray-800 rounded-lg px-3 py-2">
+    <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 transition rounded-lg px-4 py-2 font-semibold md:col-span-2">+ Add Expense</button>
+</form>
+<div class="space-y-2 fade-in">
+    {% for e in expenses %}
+    <div class="bg-gray-900 rounded-xl p-4 flex justify-between items-center border border-gray-800">
+        <div>
+            <div class="font-semibold">{{ e.title }} <span class="text-xs text-gray-500">({{ e.category }})</span></div>
+            <div class="text-sm text-gray-400">{{ e.created_at.strftime('%Y-%m-%d') }}{% if e.notes %} • {{ e.notes }}{% endif %}</div>
+        </div>
+        <div class="flex items-center gap-3">
+            <span class="text-red-400 font-semibold">Rs. {{ "%.2f"|format(e.amount) }}</span>
+            <a href="/expense/delete/{{ e._id }}" onclick="return confirm('Delete?')" class="bg-red-700 hover:bg-red-600 transition px-2 py-1 rounded text-xs">X</a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
