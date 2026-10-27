@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="text-2xl font-bold mb-6 fade-in">Returns</h2>
+
+<form method="POST" action="/returns" class="bg-gray-900 rounded-xl p-4 mb-6 grid grid-cols-1 md:grid-cols-3 gap-3 border border-gray-800 fade-in">
+    <input name="invoice_no" placeholder="Invoice No (e.g. NIM-ABC123)" required class="bg-gray-800 rounded-lg px-3 py-2">
+    <input name="reason" placeholder="Reason" class="bg-gray-800 rounded-lg px-3 py-2">
+    <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 transition rounded-lg px-4 py-2 font-semibold">Record Return</button>
+</form>
+
+<div class="space-y-2 fade-in">
+    {% for r in returns %}
+    <div class="bg-gray-900 rounded-xl p-4 border border-gray-800">
+        <div class="flex justify-between">
+            <span class="font-semibold">{{ r.invoice_no }}</span>
+            <span class="text-red-400">Rs. {{ "%.2f"|format(r.amount) }}</span>
+        </div>
+        <div class="text-sm text-gray-400">{{ r.created_at.strftime('%Y-%m-%d %H:%M') }}{% if r.reason %} • {{ r.reason }}{% endif %}</div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
