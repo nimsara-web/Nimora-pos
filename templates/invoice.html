@@ -1,19 +1,26 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="invoice-box bg-white text-black rounded-xl p-6 max-w-2xl mx-auto shadow-2xl">
+<div class="invoice-box bg-white text-black rounded-xl p-6 max-w-2xl mx-auto shadow-2xl fade-in">
     <div class="flex items-center gap-4 border-b pb-4 mb-4">
-        {% if logo %}
-        <img src="{{ logo }}" alt="logo" class="h-16 w-16 object-contain">
+        {% if settings.logo_url %}
+        <img src="{{ settings.logo_url }}" alt="logo" class="h-16 w-16 object-contain">
         {% endif %}
         <div>
-            <h1 class="text-2xl font-bold">{{ business }}</h1>
-            <p class="text-sm">📞 {{ phone }}</p>
+            <h1 class="text-2xl font-bold">{{ settings.business_name }}</h1>
+            <p class="text-sm">Tel: {{ settings.phone }}</p>
+            {% if settings.address %}<p class="text-xs text-gray-600">{{ settings.address }}</p>{% endif %}
         </div>
     </div>
 
     <div class="flex justify-between mb-4 text-sm">
-        <div><strong>Invoice:</strong> {{ inv.invoice_no }}</div>
-        <div><strong>Date:</strong> {{ inv.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
+        <div>
+            <div><strong>Invoice:</strong> {{ inv.invoice_no }}</div>
+            {% if inv.customer %}<div><strong>Customer:</strong> {{ inv.customer }}</div>{% endif %}
+        </div>
+        <div class="text-right">
+            <div><strong>Date:</strong> {{ inv.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
+            <div><strong>Payment:</strong> {{ inv.payment }}</div>
+        </div>
     </div>
 
     <table class="w-full text-sm mb-4">
@@ -33,15 +40,18 @@
         </tbody>
     </table>
 
-    <div class="text-right text-lg font-bold border-t pt-3">
-        Total: Rs. {{ "%.2f"|format(inv.total) }}
+    <div class="text-right text-sm space-y-1 border-t pt-3">
+        <div>Subtotal: Rs. {{ "%.2f"|format(inv.subtotal) }}</div>
+        {% if inv.discount %}<div class="text-red-600">Discount: - Rs. {{ "%.2f"|format(inv.discount) }}</div>{% endif %}
+        {% if inv.tax_amount %}<div>Tax ({{ inv.tax_rate }}%): Rs. {{ "%.2f"|format(inv.tax_amount) }}</div>{% endif %}
+        <div class="text-lg font-bold">Total: Rs. {{ "%.2f"|format(inv.total) }}</div>
     </div>
 
     <p class="text-center text-xs mt-6 text-gray-500">Thank you for your business!</p>
 </div>
 
-<div class="no-print mt-6 flex gap-3 justify-center">
-    <button onclick="window.print()" class="bg-emerald-600 hover:bg-emerald-500 transition px-6 py-3 rounded-xl font-semibold">🖨️ Print / PDF</button>
-    <a href="/" class="bg-gray-800 hover:bg-gray-700 transition px-6 py-3 rounded-xl font-semibold">← ආපහු</a>
+<div class="no-print mt-6 flex gap-3 justify-center fade-in">
+    <button onclick="window.print()" class="bg-emerald-600 hover:bg-emerald-500 transition px-6 py-3 rounded-xl font-semibold">Print / Save PDF</button>
+    <a href="/pos" class="bg-gray-800 hover:bg-gray-700 transition px-6 py-3 rounded-xl font-semibold">Back</a>
 </div>
 {% endblock %}
