@@ -10,12 +10,21 @@
 
 <div class="space-y-2 fade-in">
     {% for r in returns %}
-    <div class="bg-gray-900 rounded-xl p-4 border border-gray-800">
-        <div class="flex justify-between">
-            <span class="font-semibold">{{ r.invoice_no }}</span>
-            <span class="text-red-400">Rs. {{ "%.2f"|format(r.amount) }}</span>
+    <div class="bg-gray-900 rounded-xl p-4 border border-gray-800 flex justify-between items-center gap-3 card-hover">
+        <div>
+            <div class="flex items-center gap-2">
+                <span class="font-semibold">{{ r.invoice_no }}</span>
+                <span class="text-xs px-2 py-0.5 rounded-full bg-red-900/50 text-red-300">Returned</span>
+            </div>
+            <div class="text-sm text-gray-400 mt-1">
+                {{ r.created_at.strftime('%Y-%m-%d %H:%M') }}
+                {% if r.reason %} • {{ r.reason }}{% endif %}
+                • Rs. {{ "%.2f"|format(r.amount) }}
+            </div>
         </div>
-        <div class="text-sm text-gray-400">{{ r.created_at.strftime('%Y-%m-%d %H:%M') }}{% if r.reason %} • {{ r.reason }}{% endif %}</div>
+        <a href="/return/delete/{{ r._id }}"
+           onclick="return confirm('Delete this return? Stock will be adjusted back.')"
+           class="bg-red-700 hover:bg-red-600 transition px-3 py-2 rounded-lg text-sm shrink-0">Delete</a>
     </div>
     {% endfor %}
 </div>
