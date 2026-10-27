@@ -714,6 +714,26 @@ def returns():
     return render_template('returns.html', returns=list(returns_col.find().sort('created_at', -1)))
 
 
+@app.route('/return/delete/<rid>')
+@login_required
+@admin_required
+def delete_return(rid):
+    ret = returns_col.find_one({'_id': ObjectId(rid)})
+    if not ret:
+        flash('Return not found')
+        return redirect(url_for('returns'))
+    # stock ආපහු අඩු කරන්න (return එකේදී +1 වුනා නිසා)
+    for it in ret.get('items', []):
+        if it.get('item_id'):
+            try:
+                items_col.update_one({'_id': ObjectId(it['item_id'])}, {'$inc': {'stock': -1}})
+            except Exception:
+                pass
+    returns_col.delete_one({'_id': ObjectId(rid)})
+    flash(f"Return for {ret['invoice_no']} deleted and stock adjusted")
+    return redirect(url_for('returns'))
+
+
 # ================= REPORTS =================
 @app.route('/reports')
 @login_required
