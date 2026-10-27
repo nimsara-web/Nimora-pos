@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="text-2xl font-bold mb-6 fade-in">Dashboard</h2>
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 fade-in">
+    <div class="card-hover bg-gradient-to-br from-emerald-900 to-gray-900 rounded-2xl p-5 border border-emerald-800">
+        <div class="text-sm text-gray-400">Today's Sales</div>
+        <div class="text-3xl font-bold text-emerald-400 mt-1">Rs. {{ "%.2f"|format(today_sales) }}</div>
+    </div>
+    <div class="card-hover bg-gray-900 rounded-2xl p-5 border border-gray-800">
+        <div class="text-sm text-gray-400">Today's Invoices</div>
+        <div class="text-3xl font-bold mt-1">{{ today_count }}</div>
+    </div>
+    <div class="card-hover bg-gray-900 rounded-2xl p-5 border border-gray-800">
+        <div class="text-sm text-gray-400">Total Items</div>
+        <div class="text-3xl font-bold mt-1">{{ total_items }}</div>
+    </div>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 fade-in">
+    <div class="bg-gray-900 rounded-2xl p-5 border border-gray-800">
+        <h3 class="font-semibold mb-3">Low Stock</h3>
+        {% if low_stock %}
+            {% for item in low_stock %}
+            <div class="flex justify-between py-2 border-b border-gray-800 last:border-0">
+                <span>{{ item.name }}</span>
+                <span class="text-red-400 font-semibold">{{ item.stock }}</span>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p class="text-gray-500 text-sm">All stock levels are healthy</p>
+        {% endif %}
+    </div>
+    <div class="bg-gray-900 rounded-2xl p-5 border border-gray-800">
+        <h3 class="font-semibold mb-3">Recent Invoices</h3>
+        {% for inv in recent %}
+        <a href="/invoice/{{ inv._id }}" class="flex justify-between py-2 border-b border-gray-800 last:border-0 hover:text-emerald-400 transition">
+            <span>{{ inv.invoice_no }}</span>
+            <span class="text-sm text-gray-400">Rs. {{ "%.2f"|format(inv.total) }}</span>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
