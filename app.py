@@ -116,6 +116,33 @@ def logout():
     return redirect(url_for('login'))
 
 
+@app.route('/change-password', methods=['POST'])
+@login_required
+def change_password():
+    current = request.form.get('current_password', '')
+    new = request.form.get('new_password', '')
+    confirm = request.form.get('confirm_password', '')
+
+    u = users_col.find_one({'username': session['user']})
+    if not u or not check_password_hash(u['password'], current):
+        flash('Current password is incorrect')
+        return redirect(url_for('settings'))
+
+    if len(new) < 6:
+        flash('New password must be at least 6 characters')
+        return redirect(url_for('settings'))
+
+    if new != confirm:
+        flash('New passwords do not match')
+        return redirect(url_for('settings'))
+
+    users_col.update_one({'_id': u['_id']}, {'$set': {
+        'password': generate_password_hash(new)
+    }})
+    flash('Password changed successfully')
+    return redirect(url_for('settings'))
+
+
 @app.route('/users', methods=['GET', 'POST'])
 @login_required
 @admin_required
@@ -125,7 +152,9 @@ def users():
         password = request.form.get('password', '').strip()
         role = request.form.get('role', 'staff')
         if username and password:
-            if users_col.find_one({'username': username}):
+            if len(password) < 6:
+                flash('Password must be at least 6 characters')
+            elif users_col.find_one({'username': username}):
                 flash('Username already exists')
             else:
                 users_col.insert_one({
@@ -149,6 +178,25 @@ def delete_user(uid):
         return redirect(url_for('users'))
     users_col.delete_one({'_id': ObjectId(uid)})
     flash('User deleted')
+    return redirect(url_for('users'))
+
+
+@app.route('/user/reset-password/<uid>', methods=['POST'])
+@login_required
+@admin_required
+def reset_user_password(uid):
+    new_pw = request.form.get('new_password', '').strip()
+    if len(new_pw) < 6:
+        flash('Password must be at least 6 characters')
+        return redirect(url_for('users'))
+    u = users_col.find_one({'_id': ObjectId(uid)})
+    if not u:
+        flash('User not found')
+        return redirect(url_for('users'))
+    users_col.update_one({'_id': ObjectId(uid)}, {'$set': {
+        'password': generate_password_hash(new_pw)
+    }})
+    flash(f"Password reset for {u['username']}")
     return redirect(url_for('users'))
 
 
@@ -284,11 +332,9 @@ def invoice_pdf(inv_id):
     p = canvas.Canvas(buf, pagesize=A4)
     width, height = A4
 
-    # Header bar
     p.setFillColor(colors.HexColor('#064e3b'))
     p.rect(0, height - 110, width, 110, fill=1, stroke=0)
 
-    # Logo
     logo_y = height - 95
     if settings.get('logo_url'):
         try:
@@ -299,7 +345,6 @@ def invoice_pdf(inv_id):
         except Exception:
             pass
 
-    # Business info (white text)
     p.setFillColor(colors.white)
     p.setFont('Helvetica-Bold', 20)
     p.drawString(130, height - 50, settings.get('business_name', 'Nimora Brand'))
@@ -308,7 +353,6 @@ def invoice_pdf(inv_id):
     if settings.get('address'):
         p.drawString(130, height - 82, settings['address'])
 
-    # Invoice meta
     p.setFillColor(colors.black)
     p.setFont('Helvetica-Bold', 13)
     p.drawString(40, height - 140, f"Invoice: {inv['invoice_no']}")
@@ -321,7 +365,6 @@ def invoice_pdf(inv_id):
     p.drawString(40, height - (200 if inv.get('customer_phone') else 186),
                  f"Payment: {inv.get('payment', 'Cash')}")
 
-    # Table header
     y = height - 230
     p.setFillColor(colors.HexColor('#064e3b'))
     p.rect(40, y - 4, width - 80, 22, fill=1, stroke=0)
@@ -330,7 +373,6 @@ def invoice_pdf(inv_id):
     p.drawString(50, y, "Item")
     p.drawRightString(width - 50, y, "Price")
 
-    # Table rows
     p.setFillColor(colors.black)
     p.setFont('Helvetica', 10)
     y -= 28
@@ -346,7 +388,6 @@ def invoice_pdf(inv_id):
             p.showPage()
             y = height - 80
 
-    # Totals
     y -= 10
     p.setStrokeColor(colors.HexColor('#064e3b'))
     p.line(40, y, width - 40, y)
@@ -366,7 +407,6 @@ def invoice_pdf(inv_id):
     p.setFillColor(colors.HexColor('#064e3b'))
     p.drawRightString(width - 50, y - 6, f"Total: Rs. {inv['total']:.2f}")
 
-    # Footer
     p.setFillColor(colors.black)
     p.setFont('Helvetica-Oblique', 9)
     p.drawCentredString(width / 2, 60, settings.get('footer_note', 'Thank you for your business!'))
