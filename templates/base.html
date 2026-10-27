@@ -6,9 +6,7 @@
     <title>Nimora POS</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/print.css') }}">
-    <script>
-        tailwind.config = { darkMode: 'class' }
-    </script>
+    <script>tailwind.config = { darkMode: 'class' }</script>
     <style>
         @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
         .fade-in { animation: fadeIn 0.4s ease-out both; }
@@ -23,7 +21,11 @@
             <a href="/" class="block px-3 py-2 rounded-lg hover:bg-gray-800 transition">Dashboard</a>
             <a href="/pos" class="block px-3 py-2 rounded-lg hover:bg-gray-800 transition">Billing</a>
             <a href="/items" class="block px-3 py-2 rounded-lg hover:bg-gray-800 transition">Items</a>
+            <a href="/suppliers" class="block px-3 py-2 rounded-lg hover:bg-gray-800 transition">Suppliers</a>
             <a href="/invoices" class="block px-3 py-2 rounded-lg hover:bg-gray-800 transition">Invoices</a>
+            <a href="/returns" class="block px-3 py-2 rounded-lg hover:bg-gray-800 transition">Returns</a>
+            <a href="/reports" class="block px-3 py-2 rounded-lg hover:bg-gray-800 transition">Reports</a>
+            <a href="/settings" class="block px-3 py-2 rounded-lg hover:bg-gray-800 transition">Settings</a>
         </aside>
         <main class="flex-1 p-4 md:p-8">
             {% with messages = get_flashed_messages() %}
