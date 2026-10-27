@@ -64,6 +64,18 @@ def get_settings():
     return s
 
 
+@app.context_processor
+def inject_globals():
+    try:
+        s = get_settings()
+    except Exception:
+        s = {}
+    return {
+        'settings': s,
+        'now_year': datetime.utcnow().year
+    }
+
+
 def ensure_admin():
     if users_col.count_documents({}) == 0:
         users_col.insert_one({
@@ -315,8 +327,7 @@ def view_invoice(inv_id):
     if not inv:
         flash('Invoice not found')
         return redirect(url_for('dashboard'))
-    settings = get_settings()
-    return render_template('invoice.html', inv=inv, items=inv['items'], settings=settings)
+    return render_template('invoice.html', inv=inv, items=inv['items'])
 
 
 @app.route('/invoice/<inv_id>/pdf')
