@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="invoice-box bg-white text-black rounded-xl p-6 max-w-2xl mx-auto shadow-2xl">
+    <div class="flex items-center gap-4 border-b pb-4 mb-4">
+        {% if logo %}
+        <img src="{{ logo }}" alt="logo" class="h-16 w-16 object-contain">
+        {% endif %}
+        <div>
+            <h1 class="text-2xl font-bold">{{ business }}</h1>
+            <p class="text-sm">📞 {{ phone }}</p>
+        </div>
+    </div>
+
+    <div class="flex justify-between mb-4 text-sm">
+        <div><strong>Invoice:</strong> {{ inv.invoice_no }}</div>
+        <div><strong>Date:</strong> {{ inv.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
+    </div>
+
+    <table class="w-full text-sm mb-4">
+        <thead>
+            <tr class="border-b">
+                <th class="text-left py-2">Item</th>
+                <th class="text-right py-2">Price</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr class="border-b">
+                <td class="py-2">{{ item.name }}</td>
+                <td class="text-right py-2">Rs. {{ "%.2f"|format(item.price) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="text-right text-lg font-bold border-t pt-3">
+        Total: Rs. {{ "%.2f"|format(inv.total) }}
+    </div>
+
+    <p class="text-center text-xs mt-6 text-gray-500">Thank you for your business!</p>
+</div>
+
+<div class="no-print mt-6 flex gap-3 justify-center">
+    <button onclick="window.print()" class="bg-emerald-600 hover:bg-emerald-500 transition px-6 py-3 rounded-xl font-semibold">🖨️ Print / PDF</button>
+    <a href="/" class="bg-gray-800 hover:bg-gray-700 transition px-6 py-3 rounded-xl font-semibold">← ආපහු</a>
+</div>
+{% endblock %}
