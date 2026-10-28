@@ -37,6 +37,8 @@ customers_col = db.customers
 users_col = db.users
 expenses_col = db.expenses
 purchases_col = db.purchases
+journal_col = db.journal
+accounts_col = db.accounts
 
 
 # ================= HELPERS =================
@@ -86,7 +88,48 @@ def ensure_admin():
         })
 
 
+def ensure_accounts():
+    if accounts_col.count_documents({}) == 0:
+        default_accounts = [
+            {'code': '1000', 'name': 'Cash', 'type': 'Asset'},
+            {'code': '1010', 'name': 'Bank', 'type': 'Asset'},
+            {'code': '1200', 'name': 'Accounts Receivable', 'type': 'Asset'},
+            {'code': '1300', 'name': 'Inventory', 'type': 'Asset'},
+            {'code': '2000', 'name': 'Accounts Payable', 'type': 'Liability'},
+            {'code': '3000', 'name': 'Owner Equity', 'type': 'Equity'},
+            {'code': '4000', 'name': 'Sales Revenue', 'type': 'Revenue'},
+            {'code': '4100', 'name': 'Other Income', 'type': 'Revenue'},
+            {'code': '5000', 'name': 'Cost of Goods Sold', 'type': 'Expense'},
+            {'code': '6000', 'name': 'Rent Expense', 'type': 'Expense'},
+            {'code': '6100', 'name': 'Salary Expense', 'type': 'Expense'},
+            {'code': '6200', 'name': 'Utilities Expense', 'type': 'Expense'},
+            {'code': '6300', 'name': 'Transport Expense', 'type': 'Expense'},
+            {'code': '6900', 'name': 'Other Expense', 'type': 'Expense'},
+            {'code': '7000', 'name': 'Discount Given', 'type': 'Expense'},
+        ]
+        accounts_col.insert_many(default_accounts)
+
+
 ensure_admin()
+ensure_accounts()
+
+
+def post_journal(entry_date, ref, description, lines):
+    """lines = [{'account': '1000', 'debit': 0, 'credit': 0}, ...]"""
+    total_dr = sum(l.get('debit', 0) for l in lines)
+    total_cr = sum(l.get('credit', 0) for l in lines)
+    if round(total_dr, 2) != round(total_cr, 2):
+        return None
+    doc = {
+        'date': entry_date,
+        'ref': ref,
+        'description': description,
+        'lines': lines,
+        'total': total_dr,
+        'created_at': datetime.utcnow(),
+        'user': session.get('user', 'system')
+    }
+    return journal_col.insert_one(doc)
 
 
 def login_required(f):
@@ -134,23 +177,17 @@ def change_password():
     current = request.form.get('current_password', '')
     new = request.form.get('new_password', '')
     confirm = request.form.get('confirm_password', '')
-
     u = users_col.find_one({'username': session['user']})
     if not u or not check_password_hash(u['password'], current):
         flash('Current password is incorrect')
         return redirect(url_for('settings'))
-
     if len(new) < 6:
         flash('New password must be at least 6 characters')
         return redirect(url_for('settings'))
-
     if new != confirm:
         flash('New passwords do not match')
         return redirect(url_for('settings'))
-
-    users_col.update_one({'_id': u['_id']}, {'$set': {
-        'password': generate_password_hash(new)
-    }})
+    users_col.update_one({'_id': u['_id']}, {'$set': {'password': generate_password_hash(new)}})
     flash('Password changed successfully')
     return redirect(url_for('settings'))
 
@@ -205,9 +242,7 @@ def reset_user_password(uid):
     if not u:
         flash('User not found')
         return redirect(url_for('users'))
-    users_col.update_one({'_id': ObjectId(uid)}, {'$set': {
-        'password': generate_password_hash(new_pw)
-    }})
+    users_col.update_one({'_id': ObjectId(uid)}, {'$set': {'password': generate_password_hash(new_pw)}})
     flash(f"Password reset for {u['username']}")
     return redirect(url_for('users'))
 
@@ -233,6 +268,15 @@ def dashboard():
             cost = item.get('cost', 0) if item else 0
             profit_today += (it['price'] - cost)
 
+    # last 7 days sales chart data
+    chart = []
+    for d in range(6, -1, -1):
+        day = today - timedelta(days=d)
+        next_day = day + timedelta(days=1)
+        s = sum(i['total'] for i in invoices_col.find({'created_at': {'$gte': day, '$lt': next_day}}))
+        chart.append({'label': day.strftime('%a'), 'value': round(s, 2)})
+    max_val = max([c['value'] for c in chart] + [1])
+
     return render_template('dashboard.html',
                            today_sales=today_sales,
                            today_count=len(today_invoices),
@@ -240,7 +284,9 @@ def dashboard():
                            low_stock=low_stock,
                            recent=recent,
                            week_sales=week_sales,
-                           profit_today=profit_today)
+                           profit_today=profit_today,
+                           chart=chart,
+                           max_val=max_val)
 
 
 # ================= POS =================
@@ -294,7 +340,8 @@ def create_invoice():
     tax_amount = (subtotal - discount) * tax_rate / 100
     total = subtotal - discount + tax_amount
     invoice_no = f"NIM-{secrets.token_hex(3).upper()}"
-    profit = sum((i['price'] - i.get('cost', 0)) for i in items) - discount
+    total_cost = sum(i.get('cost', 0) for i in items)
+    profit = (subtotal - discount) - total_cost
 
     invoice_doc = {
         'invoice_no': invoice_no,
@@ -308,6 +355,7 @@ def create_invoice():
         'tax_rate': tax_rate,
         'tax_amount': tax_amount,
         'total': total,
+        'total_cost': total_cost,
         'profit': profit,
         'user': session.get('user', 'unknown'),
         'items': [{'item_id': str(i['_id']), 'name': i['name'], 'price': i['price'], 'cost': i.get('cost', 0)} for i in items]
@@ -316,6 +364,25 @@ def create_invoice():
 
     for i in items:
         items_col.update_one({'_id': i['_id']}, {'$inc': {'stock': -1}})
+
+    # Journal entry: Dr Cash/AR, Cr Sales Revenue
+    lines = []
+    if payment == 'Cash':
+        lines.append({'account': '1000', 'debit': total, 'credit': 0})
+    elif payment == 'Card':
+        lines.append({'account': '1010', 'debit': total, 'credit': 0})
+    else:
+        lines.append({'account': '1200', 'debit': total, 'credit': 0})
+    lines.append({'account': '4000', 'debit': 0, 'credit': subtotal})
+    if discount > 0:
+        lines.append({'account': '7000', 'debit': discount, 'credit': 0})
+    if tax_amount > 0:
+        lines.append({'account': '2000', 'debit': 0, 'credit': tax_amount})
+    # COGS
+    if total_cost > 0:
+        lines.append({'account': '5000', 'debit': total_cost, 'credit': 0})
+        lines.append({'account': '1300', 'debit': 0, 'credit': total_cost})
+    post_journal(invoice_doc['created_at'], invoice_no, f"Sale to {customer or 'walk-in'}", lines)
 
     return redirect(url_for('view_invoice', inv_id=str(result.inserted_id)))
 
@@ -343,7 +410,6 @@ def invoice_pdf(inv_id):
     p = canvas.Canvas(buf, pagesize=A4)
     width, height = A4
 
-    # Blue header bar
     p.setFillColor(colors.HexColor('#1e3a8a'))
     p.rect(0, height - 110, width, 110, fill=1, stroke=0)
 
@@ -352,8 +418,7 @@ def invoice_pdf(inv_id):
         try:
             img_data = urllib.request.urlopen(settings['logo_url'], timeout=5).read()
             img = ImageReader(io.BytesIO(img_data))
-            p.drawImage(img, 40, logo_y, width=70, height=70,
-                        preserveAspectRatio=True, mask='auto')
+            p.drawImage(img, 40, logo_y, width=70, height=70, preserveAspectRatio=True, mask='auto')
         except Exception:
             pass
 
@@ -374,10 +439,8 @@ def invoice_pdf(inv_id):
         p.drawString(40, height - 172, f"Customer: {inv['customer']}")
     if inv.get('customer_phone'):
         p.drawString(40, height - 186, f"Phone: {inv['customer_phone']}")
-    p.drawString(40, height - (200 if inv.get('customer_phone') else 186),
-                 f"Payment: {inv.get('payment', 'Cash')}")
+    p.drawString(40, height - (200 if inv.get('customer_phone') else 186), f"Payment: {inv.get('payment', 'Cash')}")
 
-    # Blue table header
     y = height - 230
     p.setFillColor(colors.HexColor('#1e3a8a'))
     p.rect(40, y - 4, width - 80, 22, fill=1, stroke=0)
@@ -386,7 +449,6 @@ def invoice_pdf(inv_id):
     p.drawString(50, y, "Item")
     p.drawRightString(width - 50, y, "Price")
 
-    # Light blue alternating rows
     p.setFillColor(colors.black)
     p.setFont('Helvetica', 10)
     y -= 28
@@ -402,7 +464,6 @@ def invoice_pdf(inv_id):
             p.showPage()
             y = height - 80
 
-    # Blue totals line
     y -= 10
     p.setStrokeColor(colors.HexColor('#1e3a8a'))
     p.line(40, y, width - 40, y)
@@ -484,6 +545,11 @@ def delete_invoice(inv_id):
             except Exception:
                 pass
     invoices_col.delete_one({'_id': ObjectId(inv_id)})
+    # Reverse journal
+    post_journal(datetime.utcnow(), inv['invoice_no'], f"Reversal of {inv['invoice_no']}", [
+        {'account': '4000', 'debit': inv['subtotal'], 'credit': 0},
+        {'account': '1000', 'debit': 0, 'credit': inv['total']}
+    ])
     flash(f"Invoice {inv['invoice_no']} deleted and stock restored")
     return redirect(url_for('invoices_list'))
 
@@ -530,13 +596,16 @@ def manage_items():
             return redirect(url_for('manage_items'))
         name = request.form.get('name', '').strip()
         if name and price > 0:
+            barcode = request.form.get('barcode', '').strip()
+            if not barcode:
+                barcode = f"NIM{secrets.token_hex(4).upper()}"
             items_col.insert_one({
                 'name': name, 'price': price, 'stock': stock, 'cost': cost,
-                'barcode': request.form.get('barcode', '').strip(),
+                'barcode': barcode,
                 'supplier': request.form.get('supplier', '').strip(),
                 'created_at': datetime.utcnow()
             })
-            flash('Item added')
+            flash(f'Item added — Barcode: {barcode}')
         return redirect(url_for('manage_items'))
     items = list(items_col.find().sort('name', 1))
     suppliers = list(suppliers_col.find())
@@ -576,6 +645,25 @@ def edit_item(item_id):
     return render_template('items.html',
                            items=list(items_col.find().sort('name', 1)),
                            suppliers=list(suppliers_col.find()), edit_item=item)
+
+
+# ================= BARCODE STICKER PRINT =================
+@app.route('/item/<item_id>/sticker')
+@login_required
+def item_sticker(item_id):
+    item = items_col.find_one({'_id': ObjectId(item_id)})
+    if not item:
+        flash('Item not found')
+        return redirect(url_for('manage_items'))
+    qty = int(request.args.get('qty', 1))
+    return render_template('sticker.html', item=item, qty=qty)
+
+
+@app.route('/items/barcode-sheet')
+@login_required
+def barcode_sheet():
+    items = list(items_col.find().sort('name', 1))
+    return render_template('barcode_print.html', items=items)
 
 
 # ================= CUSTOMERS =================
@@ -657,6 +745,12 @@ def purchases():
         it = items_col.find_one({'name': item_name})
         if it:
             items_col.update_one({'_id': it['_id']}, {'$inc': {'stock': qty}})
+        # Journal: Dr Inventory, Cr Cash
+        post_journal(datetime.utcnow(), f"PUR-{secrets.token_hex(3).upper()}",
+                     f"Purchase {item_name} x{qty}", [
+                         {'account': '1300', 'debit': total, 'credit': 0},
+                         {'account': '1000', 'debit': 0, 'credit': total}
+                     ])
         flash('Purchase recorded and stock updated')
         return redirect(url_for('purchases'))
     return render_template('purchases.html',
@@ -673,7 +767,6 @@ def edit_purchase(pid):
     if not p:
         flash('Purchase not found')
         return redirect(url_for('purchases'))
-
     if request.method == 'POST':
         try:
             new_qty = int(request.form.get('quantity', 0))
@@ -682,27 +775,22 @@ def edit_purchase(pid):
             flash('Invalid numbers')
             return redirect(url_for('edit_purchase', pid=pid))
         new_item = request.form.get('item', '').strip()
-        new_supplier = request.form.get('supplier', '').strip()
         old_item = p.get('item', '')
         old_qty = p.get('quantity', 0)
-
         old_it = items_col.find_one({'name': old_item})
         if old_it:
             items_col.update_one({'_id': old_it['_id']}, {'$inc': {'stock': -old_qty}})
-
         new_it = items_col.find_one({'name': new_item})
         if new_it:
             items_col.update_one({'_id': new_it['_id']}, {'$inc': {'stock': new_qty}})
-
         purchases_col.update_one({'_id': ObjectId(pid)}, {'$set': {
             'item': new_item,
-            'supplier': new_supplier,
+            'supplier': request.form.get('supplier', '').strip(),
             'quantity': new_qty,
             'total': new_total
         }})
         flash('Purchase updated and stock adjusted')
         return redirect(url_for('purchases'))
-
     return render_template('purchases.html',
                            purchases=list(purchases_col.find().sort('created_at', -1)),
                            items=list(items_col.find().sort('name', 1)),
@@ -722,7 +810,7 @@ def delete_purchase(pid):
     if it:
         items_col.update_one({'_id': it['_id']}, {'$inc': {'stock': -p.get('quantity', 0)}})
     purchases_col.delete_one({'_id': ObjectId(pid)})
-    flash(f"Purchase for {p.get('item', '')} deleted and stock adjusted")
+    flash(f"Purchase deleted and stock adjusted")
     return redirect(url_for('purchases'))
 
 
@@ -736,13 +824,21 @@ def expenses():
         except ValueError:
             flash('Invalid amount')
             return redirect(url_for('expenses'))
+        cat = request.form.get('category', 'Other')
         expenses_col.insert_one({
             'title': request.form.get('title', '').strip(),
-            'category': request.form.get('category', 'Other'),
+            'category': cat,
             'amount': amount,
             'notes': request.form.get('notes', '').strip(),
             'created_at': datetime.utcnow()
         })
+        # Journal: Dr Expense account, Cr Cash
+        exp_acct = {'Rent': '6000', 'Salary': '6100', 'Utilities': '6200', 'Transport': '6300'}.get(cat, '6900')
+        post_journal(datetime.utcnow(), f"EXP-{secrets.token_hex(3).upper()}",
+                     f"Expense: {request.form.get('title', '')}", [
+                         {'account': exp_acct, 'debit': amount, 'credit': 0},
+                         {'account': '1000', 'debit': 0, 'credit': amount}
+                     ])
         flash('Expense added')
         return redirect(url_for('expenses'))
     exp = list(expenses_col.find().sort('created_at', -1))
@@ -778,6 +874,12 @@ def returns():
         for it in inv['items']:
             if it.get('item_id'):
                 items_col.update_one({'_id': ObjectId(it['item_id'])}, {'$inc': {'stock': 1}})
+        # Reverse journal
+        post_journal(datetime.utcnow(), f"RET-{secrets.token_hex(3).upper()}",
+                     f"Return for {inv_no}", [
+                         {'account': '4000', 'debit': inv['total'], 'credit': 0},
+                         {'account': '1000', 'debit': 0, 'credit': inv['total']}
+                     ])
         flash('Return recorded')
         return redirect(url_for('returns'))
     return render_template('returns.html', returns=list(returns_col.find().sort('created_at', -1)))
@@ -798,7 +900,7 @@ def delete_return(rid):
             except Exception:
                 pass
     returns_col.delete_one({'_id': ObjectId(rid)})
-    flash(f"Return for {ret['invoice_no']} deleted and stock adjusted")
+    flash(f"Return deleted and stock adjusted")
     return redirect(url_for('returns'))
 
 
@@ -818,7 +920,6 @@ def reports():
     invs = list(invoices_col.find(query).sort('created_at', -1))
     total = sum(i['total'] for i in invs)
     profit = sum(i.get('profit', 0) for i in invs)
-
     item_summary = {}
     for inv in invs:
         for it in inv['items']:
@@ -858,6 +959,143 @@ def reports_export():
                     headers={'Content-Disposition': 'attachment;filename=report.csv'})
 
 
+# ================= JOURNAL / ACCOUNTING =================
+@app.route('/accounts', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def accounts():
+    if request.method == 'POST':
+        code = request.form.get('code', '').strip()
+        name = request.form.get('name', '').strip()
+        atype = request.form.get('type', 'Asset')
+        if code and name:
+            if accounts_col.find_one({'code': code}):
+                flash('Account code already exists')
+            else:
+                accounts_col.insert_one({'code': code, 'name': name, 'type': atype})
+                flash('Account created')
+        return redirect(url_for('accounts'))
+    return render_template('accounts.html', accounts=list(accounts_col.find().sort('code', 1)))
+
+
+@app.route('/account/delete/<aid>')
+@login_required
+@admin_required
+def delete_account(aid):
+    accounts_col.delete_one({'_id': ObjectId(aid)})
+    flash('Account deleted')
+    return redirect(url_for('accounts'))
+
+
+@app.route('/journal', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def journal():
+    if request.method == 'POST':
+        date_str = request.form.get('date', '').strip()
+        ref = request.form.get('ref', '').strip()
+        desc = request.form.get('description', '').strip()
+        try:
+            entry_date = datetime.strptime(date_str, '%Y-%m-%d')
+        except Exception:
+            entry_date = datetime.utcnow()
+        # Lines come as arrays
+        accounts_list = request.form.getlist('account[]')
+        debits = request.form.getlist('debit[]')
+        credits = request.form.getlist('credit[]')
+        lines = []
+        for a, d, c in zip(accounts_list, debits, credits):
+            if not a:
+                continue
+            try:
+                dv = float(d or 0)
+                cv = float(c or 0)
+            except ValueError:
+                continue
+            if dv == 0 and cv == 0:
+                continue
+            lines.append({'account': a, 'debit': dv, 'credit': cv})
+        if not lines:
+            flash('No valid lines')
+            return redirect(url_for('journal'))
+        result = post_journal(entry_date, ref or f"JE-{secrets.token_hex(3).upper()}", desc, lines)
+        if not result:
+            flash('Debit and credit totals must match')
+        else:
+            flash('Journal entry posted')
+        return redirect(url_for('journal'))
+
+    entries = list(journal_col.find().sort('date', -1).limit(100))
+    accts = {a['code']: a['name'] for a in accounts_col.find()}
+    return render_template('journal.html', entries=entries, accounts=list(accounts_col.find().sort('code', 1)), acct_map=accts)
+
+
+@app.route('/journal/delete/<jid>')
+@login_required
+@admin_required
+def delete_journal(jid):
+    journal_col.delete_one({'_id': ObjectId(jid)})
+    flash('Journal entry deleted')
+    return redirect(url_for('journal'))
+
+
+@app.route('/ledger')
+@login_required
+@admin_required
+def ledger():
+    code = request.args.get('code', '').strip()
+    entries = list(journal_col.find().sort('date', 1))
+    rows = []
+    if code:
+        for e in entries:
+            for ln in e['lines']:
+                if ln['account'] == code:
+                    rows.append({
+                        'date': e['date'],
+                        'ref': e['ref'],
+                        'desc': e['description'],
+                        'debit': ln['debit'],
+                        'credit': ln['credit']
+                    })
+    balance = 0
+    for r in rows:
+        balance += r['debit'] - r['credit']
+        r['balance'] = balance
+    accts = list(accounts_col.find().sort('code', 1))
+    current = accounts_col.find_one({'code': code}) if code else None
+    return render_template('accounts.html', accounts=accts, ledger_rows=rows,
+                           current=current, ledger=True)
+
+
+@app.route('/trial-balance')
+@login_required
+@admin_required
+def trial_balance():
+    entries = list(journal_col.find())
+    balances = {}
+    for e in entries:
+        for ln in e['lines']:
+            if ln['account'] not in balances:
+                balances[ln['account']] = {'debit': 0, 'credit': 0}
+            balances[ln['account']]['debit'] += ln['debit']
+            balances[ln['account']]['credit'] += ln['credit']
+    rows = []
+    total_dr = 0
+    total_cr = 0
+    for a in accounts_col.find().sort('code', 1):
+        b = balances.get(a['code'], {'debit': 0, 'credit': 0})
+        net = b['debit'] - b['credit']
+        row = {
+            'code': a['code'], 'name': a['name'], 'type': a['type'],
+            'debit': net if net > 0 else 0,
+            'credit': -net if net < 0 else 0
+        }
+        total_dr += row['debit']
+        total_cr += row['credit']
+        rows.append(row)
+    return render_template('accounts.html', trial_rows=rows, total_dr=total_dr, total_cr=total_cr, trial=True)
+
+
 # ================= SETTINGS =================
 @app.route('/settings', methods=['GET', 'POST'])
 @login_required
@@ -892,24 +1130,20 @@ def settings():
 @login_required
 @admin_required
 def backup():
-    data = {
-        'items': [],
-        'invoices': [],
-        'customers': [],
-        'suppliers': [],
-        'expenses': [],
-        'purchases': [],
-        'returns': [],
-        'settings': get_settings()
-    }
+    data = {k: [] for k in ['items', 'invoices', 'customers', 'suppliers',
+                             'expenses', 'purchases', 'returns', 'journal', 'accounts']}
+    data['settings'] = get_settings()
     for name, col in [('items', items_col), ('invoices', invoices_col),
                       ('customers', customers_col), ('suppliers', suppliers_col),
                       ('expenses', expenses_col), ('purchases', purchases_col),
-                      ('returns', returns_col)]:
+                      ('returns', returns_col), ('journal', journal_col),
+                      ('accounts', accounts_col)]:
         for doc in col.find():
             doc['_id'] = str(doc['_id'])
             if 'created_at' in doc:
                 doc['created_at'] = doc['created_at'].isoformat()
+            if 'date' in doc:
+                doc['date'] = doc['date'].isoformat()
             data[name].append(doc)
     data['settings'].pop('_id', None)
     out = json.dumps(data, indent=2, default=str)
