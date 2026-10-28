@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="text-2xl font-bold mb-4 fade-in">Barcode Sticker Sheet</h2>
+<div class="no-print mb-4 fade-in">
+    <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg font-semibold">Print Sheet</button>
+</div>
+<div class="bg-white text-black p-4 rounded-xl">
+    <div class="grid grid-cols-3 gap-2">
+        {% for it in items %}
+        <div class="border border-gray-300 p-2 text-center">
+            <div class="text-xs font-bold">{{ settings.business_name }}</div>
+            <div class="text-xs">{{ it.name }}</div>
+            <img src="https://barcode.tec-it.com/barcode.ashx?data={{ it.barcode }}&code=Code128&translate-esc=on" alt="barcode" class="mx-auto my-1" style="height:40px;">
+            <div class="text-xs font-mono">{{ it.barcode }}</div>
+            <div class="text-xs font-bold">Rs. {{ '%.2f'|format(it.price) }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
