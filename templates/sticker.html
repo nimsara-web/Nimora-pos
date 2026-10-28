@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Sticker — {{ item.name }}</title>
+<style>
+@page { margin: 4mm; size: 50mm 30mm; }
+body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+.sticker { width: 50mm; height: 30mm; padding: 2mm; box-sizing: border-box; page-break-after: always; text-align: center; }
+.biz { font-size: 7px; font-weight: bold; }
+.name { font-size: 8px; }
+.code { font-family: monospace; font-size: 8px; margin-top: 1mm; }
+.price { font-weight: bold; font-size: 9px; }
+</style>
+</head>
+<body onload="window.print()">
+{% for i in range(qty) %}
+<div class="sticker">
+    <div class="biz">{{ settings.business_name }}</div>
+    <div class="name">{{ item.name }}</div>
+    <img src="https://barcode.tec-it.com/barcode.ashx?data={{ item.barcode }}&code=Code128&translate-esc=on" style="height:7mm; display:block; margin:0 auto;">
+    <div class="code">{{ item.barcode }}</div>
+    <div class="price">Rs. {{ '%.2f'|format(item.price) }}</div>
+</div>
+{% endfor %}
+</body>
+</html>
