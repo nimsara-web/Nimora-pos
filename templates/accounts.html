@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block content %}
+
+{% if trial %}
+<h2 class="text-2xl font-bold mb-6 fade-in">Trial Balance</h2>
+<div class="bg-gray-900 rounded-xl p-4 border border-gray-800 fade-in">
+    <table class="w-full text-sm">
+        <thead><tr class="text-gray-400 border-b border-gray-800"><th class="text-left py-2">Code</th><th class="text-left py-2">Account</th><th class="text-left py-2">Type</th><th class="text-right py-2">Debit</th><th class="text-right py-2">Credit</th></tr></thead>
+        <tbody>
+        {% for r in trial_rows %}
+            <tr class="border-b border-gray-800/50">
+                <td class="py-2">{{ r.code }}</td>
+                <td class="py-2">{{ r.name }}</td>
+                <td class="py-2 text-gray-500">{{ r.type }}</td>
+                <td class="text-right py-2">{{ '%.2f'|format(r.debit) if r.debit else '' }}</td>
+                <td class="text-right py-2">{{ '%.2f'|format(r.credit) if r.credit else '' }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+        <tfoot><tr class="font-bold border-t-2 border-emerald-700"><td colspan="3" class="py-2">Totals</td><td class="text-right text-emerald-400">{{ '%.2f'|format(total_dr) }}</td><td class="text-right text-emerald-400">{{ '%.2f'|format(total_cr) }}</td></tr></tfoot>
+    </table>
+</div>
+
+{% elif ledger %}
+<h2 class="text-2xl font-bold mb-6 fade-in">Ledger {% if current %}— {{ current.code }} {{ current.name }}{% endif %}</h2>
+<form method="GET" action="/ledger" class="mb-4 fade-in">
+    <select name="code" onchange="this.form.submit()" class="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2">
+        <option value="">— Choose account —</option>
+        {% for a in accounts %}<option value="{{ a.code }}" {% if current and a.code == current.code %}selected{% endif %}>{{ a.code }} - {{ a.name }}</option>{% endfor %}
+    </select>
+</form>
+{% if ledger_rows %}
+<div class="bg-gray-900 rounded-xl p-4 border border-gray-800 fade-in">
+    <table class="w-full text-sm">
+        <thead><tr class="text-gray-400 border-b border-gray-800"><th class="text-left py-2">Date</th><th class="text-left py-2">Ref</th><th class="text-left py-2">Description</th><th class="text-right py-2">Debit</th><th class="text-right py-2">Credit</th><th class="text-right py-2">Balance</th></tr></thead>
+        <tbody>
+        {% for r in ledger_rows %}
+            <tr class="border-b border-gray-800/50">
+                <td class="py-2">{{ r.date.strftime('%Y-%m-%d') }}</td>
+                <td class="py-2">{{ r.ref }}</td>
+                <td class="py-2 text-gray-400">{{ r.desc }}</td>
+                <td class="text-right">{{ '%.2f'|format(r.debit) if r.debit else '' }}</td>
+                <td class="text-right">{{ '%.2f'|format(r.credit) if r.credit else '' }}</td>
+                <td class="text-right text-emerald-400">{{ '%.2f'|format(r.balance) }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% else %}
+<h2 class="text-2xl font-bold mb-6 fade-in">Chart of Accounts</h2>
+<form method="POST" action="/accounts" class="bg-gray-900 rounded-xl p-4 mb-6 grid grid-cols-1 md:grid-cols-4 gap-3 border border-gray-800 fade-in">
+    <input name="code" placeholder="Code (e.g. 4010)" required class="bg-gray-800 rounded-lg px-3 py-2">
+    <input name="name" placeholder="Account name" required class="bg-gray-800 rounded-lg px-3 py-2">
+    <select name="type" class="bg-gray-800 rounded-lg px-3 py-2">
+        <option>Asset</option><option>Liability</option><option>Equity</option><option>Revenue</option><option>Expense</option>
+    </select>
+    <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 rounded-lg px-4 py-2 font-semibold">+ Add</button>
+</form>
+<div class="space-y-2 fade-in">
+    {% for a in accounts %}
+    <div class="bg-gray-900 rounded-xl p-3 border border-gray-800 flex justify-between items-center">
+        <div><span class="font-mono text-emerald-400">{{ a.code }}</span> — {{ a.name }} <span class="text-xs text-gray-500">({{ a.type }})</span></div>
+        <a href="/account/delete/{{ a._id }}" onclick="return confirm('Delete account?')" class="text-red-400 text-sm">Delete</a>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% endblock %}
