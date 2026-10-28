@@ -12,12 +12,26 @@
         <div class="text-3xl font-bold mt-1">{{ today_count }}</div>
     </div>
     <div class="card-hover bg-gray-900 rounded-2xl p-5 border border-gray-800">
+        <div class="text-sm text-gray-400">Today's Profit</div>
+        <div class="text-3xl font-bold text-emerald-400 mt-1">Rs. {{ "%.2f"|format(profit_today) }}</div>
+    </div>
+    <div class="card-hover bg-gray-900 rounded-2xl p-5 border border-gray-800">
         <div class="text-sm text-gray-400">Last 7 Days</div>
         <div class="text-3xl font-bold mt-1">Rs. {{ "%.2f"|format(week_sales) }}</div>
     </div>
-    <div class="card-hover bg-gray-900 rounded-2xl p-5 border border-gray-800">
-        <div class="text-sm text-gray-400">Total Items</div>
-        <div class="text-3xl font-bold mt-1">{{ total_items }}</div>
+</div>
+
+<div class="bg-gray-900 rounded-2xl p-5 border border-gray-800 fade-in mb-4">
+    <h3 class="font-semibold mb-3">Last 7 Days Sales</h3>
+    <div class="flex items-end gap-2 h-40">
+        {% for c in chart %}
+        <div class="flex-1 flex flex-col items-center gap-1">
+            <div class="text-[10px] text-gray-400">Rs. {{ '%.0f'|format(c.value) }}</div>
+            <div class="w-full bg-gradient-to-t from-blue-600 to-blue-400 rounded-t"
+                 style="height: {{ (c.value / max_val * 100)|round(0) if max_val > 0 else 0 }}%; min-height:2px;"></div>
+            <div class="text-xs text-gray-500">{{ c.label }}</div>
+        </div>
+        {% endfor %}
     </div>
 </div>
 
