@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="text-2xl font-bold mb-6 fade-in">Journal Entries</h2>
+
+<form method="POST" action="/journal" class="bg-gray-900 rounded-xl p-4 mb-6 border border-gray-800 fade-in">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+        <input type="date" name="date" required class="bg-gray-800 rounded-lg px-3 py-2">
+        <input name="ref" placeholder="Reference (auto if blank)" class="bg-gray-800 rounded-lg px-3 py-2">
+        <input name="description" placeholder="Description" class="bg-gray-800 rounded-lg px-3 py-2 md:col-span-3">
+    </div>
+    <div id="lines" class="space-y-2 mb-3">
+        <div class="grid grid-cols-12 gap-2 line-row">
+            <select name="account[]" class="col-span-6 bg-gray-800 rounded-lg px-3 py-2">
+                <option value="">— Select account —</option>
+                {% for a in accounts %}<option value="{{ a.code }}">{{ a.code }} - {{ a.name }}</option>{% endfor %}
+            </select>
+            <input name="debit[]" type="number" step="0.01" placeholder="Debit" class="col-span-3 bg-gray-800 rounded-lg px-3 py-2">
+            <input name="credit[]" type="number" step="0.01" placeholder="Credit" class="col-span-3 bg-gray-800 rounded-lg px-3 py-2">
+        </div>
+    </div>
+    <button type="button" onclick="addLine()" class="bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded-lg text-sm mb-3">+ Add Line</button>
+    <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded-lg font-semibold w-full">Post Entry</button>
+</form>
+
+<div class="space-y-2 fade-in">
+    {% for e in entries %}
+    <div class="bg-gray-900 rounded-xl p-4 border border-gray-800">
+        <div class="flex justify-between items-start">
+            <div>
+                <div class="font-semibold">{{ e.ref }} — {{ e.description }}</div>
+                <div class="text-xs text-gray-500">{{ e.date.strftime('%Y-%m-%d') }} • by {{ e.user }}</div>
+            </div>
+            <a href="/journal/delete/{{ e._id }}" onclick="return confirm('Delete this journal entry?')" class="text-red-400 hover:text-red-300 text-sm">Delete</a>
+        </div>
+        <table class="w-full text-sm mt-2">
+            <thead><tr class="text-gray-500 border-b border-gray-800"><th class="text-left py-1">Account</th><th class="text-right py-1">Debit</th><th class="text-right py-1">Credit</th></tr></thead>
+            <tbody>
+            {% for l in e.lines %}
+                <tr class="border-b border-gray-800/50">
+                    <td class="py-1">{{ l.account }} — {{ acct_map.get(l.account, '?') }}</td>
+                    <td class="text-right">{{ '%.2f'|format(l.debit) if l.debit else '' }}</td>
+                    <td class="text-right">{{ '%.2f'|format(l.credit) if l.credit else '' }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <div class="text-right text-sm font-semibold mt-1 text-emerald-400">Total: Rs. {{ '%.2f'|format(e.total) }}</div>
+    </div>
+    {% endfor %}
+</div>
+
+<script>
+function addLine() {
+    const tpl = document.querySelector('.line-row');
+    const clone = tpl.cloneNode(true);
+    clone.querySelectorAll('input').forEach(i => i.value = '');
+    document.getElementById('lines').appendChild(clone);
+}
+</script>
+{% endblock %}
