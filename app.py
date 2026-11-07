@@ -115,7 +115,6 @@ ensure_accounts()
 
 
 def post_journal(entry_date, ref, description, lines):
-    """lines = [{'account': '1000', 'debit': 0, 'credit': 0}, ...]"""
     total_dr = sum(l.get('debit', 0) for l in lines)
     total_cr = sum(l.get('credit', 0) for l in lines)
     if round(total_dr, 2) != round(total_cr, 2):
@@ -263,12 +262,8 @@ def dashboard():
 
     profit_today = 0
     for inv in today_invoices:
-        for it in inv['items']:
-            item = items_col.find_one({'_id': ObjectId(it['item_id'])}) if it.get('item_id') else None
-            cost = item.get('cost', 0) if item else 0
-            profit_today += (it['price'] - cost)
+        profit_today += inv.get('profit', 0)
 
-    # last 7 days sales chart data
     chart = []
     for d in range(6, -1, -1):
         day = today - timedelta(days=d)
@@ -320,7 +315,42 @@ def create_invoice():
         flash('Selected items could not be found')
         return redirect(url_for('index'))
 
-    subtotal = sum(i['price'] for i in items)
+    item_map = {str(i['_id']): i for i in items}
+
+    line_items = []
+    subtotal = 0
+    total_cost = 0
+    for iid in selected:
+        if iid not in item_map:
+            continue
+        qty_str = request.form.get(f'qty_{iid}', '1')
+        try:
+            qty = int(qty_str)
+        except ValueError:
+            qty = 1
+        if qty <= 0:
+            continue
+        item = item_map[iid]
+        if qty > item.get('stock', 0):
+            flash(f"Not enough stock for {item['name']} (available: {item.get('stock', 0)})")
+            return redirect(url_for('index'))
+        line_total = item['price'] * qty
+        line_cost = item.get('cost', 0) * qty
+        subtotal += line_total
+        total_cost += line_cost
+        line_items.append({
+            'item_id': str(item['_id']),
+            'name': item['name'],
+            'price': item['price'],
+            'qty': qty,
+            'line_total': line_total,
+            'cost': item.get('cost', 0)
+        })
+
+    if not line_items:
+        flash('Please select at least one item with quantity')
+        return redirect(url_for('index'))
+
     discount = float(request.form.get('discount', 0) or 0)
     tax_rate = float(request.form.get('tax_rate', 0) or 0)
     customer = request.form.get('customer', '').strip()
@@ -340,7 +370,6 @@ def create_invoice():
     tax_amount = (subtotal - discount) * tax_rate / 100
     total = subtotal - discount + tax_amount
     invoice_no = f"NIM-{secrets.token_hex(3).upper()}"
-    total_cost = sum(i.get('cost', 0) for i in items)
     profit = (subtotal - discount) - total_cost
 
     invoice_doc = {
@@ -358,14 +387,13 @@ def create_invoice():
         'total_cost': total_cost,
         'profit': profit,
         'user': session.get('user', 'unknown'),
-        'items': [{'item_id': str(i['_id']), 'name': i['name'], 'price': i['price'], 'cost': i.get('cost', 0)} for i in items]
+        'items': line_items
     }
     result = invoices_col.insert_one(invoice_doc)
 
-    for i in items:
-        items_col.update_one({'_id': i['_id']}, {'$inc': {'stock': -1}})
+    for li in line_items:
+        items_col.update_one({'_id': ObjectId(li['item_id'])}, {'$inc': {'stock': -li['qty']}})
 
-    # Journal entry: Dr Cash/AR, Cr Sales Revenue
     lines = []
     if payment == 'Cash':
         lines.append({'account': '1000', 'debit': total, 'credit': 0})
@@ -378,7 +406,6 @@ def create_invoice():
         lines.append({'account': '7000', 'debit': discount, 'credit': 0})
     if tax_amount > 0:
         lines.append({'account': '2000', 'debit': 0, 'credit': tax_amount})
-    # COGS
     if total_cost > 0:
         lines.append({'account': '5000', 'debit': total_cost, 'credit': 0})
         lines.append({'account': '1300', 'debit': 0, 'credit': total_cost})
@@ -447,7 +474,9 @@ def invoice_pdf(inv_id):
     p.setFillColor(colors.white)
     p.setFont('Helvetica-Bold', 11)
     p.drawString(50, y, "Item")
-    p.drawRightString(width - 50, y, "Price")
+    p.drawString(340, y, "Qty")
+    p.drawRightString(460, y, "Price")
+    p.drawRightString(width - 50, y, "Total")
 
     p.setFillColor(colors.black)
     p.setFont('Helvetica', 10)
@@ -457,8 +486,12 @@ def invoice_pdf(inv_id):
             p.setFillColor(colors.HexColor('#eff6ff'))
             p.rect(40, y - 6, width - 80, 20, fill=1, stroke=0)
         p.setFillColor(colors.black)
-        p.drawString(50, y, it['name'][:60])
-        p.drawRightString(width - 50, y, f"Rs. {it['price']:.2f}")
+        qty = it.get('qty', 1)
+        line_total = it.get('line_total', it['price'] * qty)
+        p.drawString(50, y, it['name'][:45])
+        p.drawString(340, y, str(qty))
+        p.drawRightString(460, y, f"Rs. {it['price']:.2f}")
+        p.drawRightString(width - 50, y, f"Rs. {line_total:.2f}")
         y -= 22
         if y < 150:
             p.showPage()
@@ -506,7 +539,8 @@ def invoice_whatsapp(inv_id):
     lines = [f"*{s.get('business_name', 'Nimora Brand')}*", f"Invoice: {inv['invoice_no']}",
              f"Date: {inv['created_at'].strftime('%Y-%m-%d')}"]
     for it in inv['items']:
-        lines.append(f"- {it['name']}: Rs.{it['price']:.2f}")
+        qty = it.get('qty', 1)
+        lines.append(f"- {it['name']} x{qty}: Rs.{it['price'] * qty:.2f}")
     lines.append(f"*Total: Rs.{inv['total']:.2f}*")
     lines.append(s.get('footer_note', ''))
     msg = '\n'.join(lines)
@@ -541,11 +575,11 @@ def delete_invoice(inv_id):
     for it in inv.get('items', []):
         if it.get('item_id'):
             try:
-                items_col.update_one({'_id': ObjectId(it['item_id'])}, {'$inc': {'stock': 1}})
+                qty = it.get('qty', 1)
+                items_col.update_one({'_id': ObjectId(it['item_id'])}, {'$inc': {'stock': qty}})
             except Exception:
                 pass
     invoices_col.delete_one({'_id': ObjectId(inv_id)})
-    # Reverse journal
     post_journal(datetime.utcnow(), inv['invoice_no'], f"Reversal of {inv['invoice_no']}", [
         {'account': '4000', 'debit': inv['subtotal'], 'credit': 0},
         {'account': '1000', 'debit': 0, 'credit': inv['total']}
@@ -571,7 +605,8 @@ def delete_test_invoices():
             for it in inv.get('items', []):
                 if it.get('item_id'):
                     try:
-                        items_col.update_one({'_id': ObjectId(it['item_id'])}, {'$inc': {'stock': 1}})
+                        qty = it.get('qty', 1)
+                        items_col.update_one({'_id': ObjectId(it['item_id'])}, {'$inc': {'stock': qty}})
                     except Exception:
                         pass
             invoices_col.delete_one({'_id': ObjectId(iid)})
@@ -647,7 +682,6 @@ def edit_item(item_id):
                            suppliers=list(suppliers_col.find()), edit_item=item)
 
 
-# ================= BARCODE STICKER PRINT =================
 @app.route('/item/<item_id>/sticker')
 @login_required
 def item_sticker(item_id):
@@ -745,7 +779,6 @@ def purchases():
         it = items_col.find_one({'name': item_name})
         if it:
             items_col.update_one({'_id': it['_id']}, {'$inc': {'stock': qty}})
-        # Journal: Dr Inventory, Cr Cash
         post_journal(datetime.utcnow(), f"PUR-{secrets.token_hex(3).upper()}",
                      f"Purchase {item_name} x{qty}", [
                          {'account': '1300', 'debit': total, 'credit': 0},
@@ -832,7 +865,6 @@ def expenses():
             'notes': request.form.get('notes', '').strip(),
             'created_at': datetime.utcnow()
         })
-        # Journal: Dr Expense account, Cr Cash
         exp_acct = {'Rent': '6000', 'Salary': '6100', 'Utilities': '6200', 'Transport': '6300'}.get(cat, '6900')
         post_journal(datetime.utcnow(), f"EXP-{secrets.token_hex(3).upper()}",
                      f"Expense: {request.form.get('title', '')}", [
@@ -873,8 +905,8 @@ def returns():
         })
         for it in inv['items']:
             if it.get('item_id'):
-                items_col.update_one({'_id': ObjectId(it['item_id'])}, {'$inc': {'stock': 1}})
-        # Reverse journal
+                qty = it.get('qty', 1)
+                items_col.update_one({'_id': ObjectId(it['item_id'])}, {'$inc': {'stock': qty}})
         post_journal(datetime.utcnow(), f"RET-{secrets.token_hex(3).upper()}",
                      f"Return for {inv_no}", [
                          {'account': '4000', 'debit': inv['total'], 'credit': 0},
@@ -896,7 +928,8 @@ def delete_return(rid):
     for it in ret.get('items', []):
         if it.get('item_id'):
             try:
-                items_col.update_one({'_id': ObjectId(it['item_id'])}, {'$inc': {'stock': -1}})
+                qty = it.get('qty', 1)
+                items_col.update_one({'_id': ObjectId(it['item_id'])}, {'$inc': {'stock': -qty}})
             except Exception:
                 pass
     returns_col.delete_one({'_id': ObjectId(rid)})
@@ -924,10 +957,11 @@ def reports():
     for inv in invs:
         for it in inv['items']:
             k = it['name']
+            qty = it.get('qty', 1)
             if k not in item_summary:
                 item_summary[k] = {'qty': 0, 'total': 0}
-            item_summary[k]['qty'] += 1
-            item_summary[k]['total'] += it['price']
+            item_summary[k]['qty'] += qty
+            item_summary[k]['total'] += it['price'] * qty
     return render_template('reports.html', invoices=invs, total=total, profit=profit,
                            count=len(invs),
                            item_summary=sorted(item_summary.items(), key=lambda x: x[1]['total'], reverse=True),
@@ -999,7 +1033,6 @@ def journal():
             entry_date = datetime.strptime(date_str, '%Y-%m-%d')
         except Exception:
             entry_date = datetime.utcnow()
-        # Lines come as arrays
         accounts_list = request.form.getlist('account[]')
         debits = request.form.getlist('debit[]')
         credits = request.form.getlist('credit[]')
