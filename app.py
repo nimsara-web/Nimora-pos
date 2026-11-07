@@ -131,6 +131,46 @@ def post_journal(entry_date, ref, description, lines):
     return journal_col.insert_one(doc)
 
 
+def reverse_journal(inv_no, inv=None):
+    """Original journal entry එක හොයලා reverse කරනවා.
+    නැත්නම් inv data එකෙන් manual reversal එකක් හදනවා."""
+    original = journal_col.find_one({'ref': inv_no})
+    if original:
+        reverse_lines = []
+        for ln in original['lines']:
+            reverse_lines.append({
+                'account': ln['account'],
+                'debit': ln.get('credit', 0),
+                'credit': ln.get('debit', 0)
+            })
+        post_journal(datetime.utcnow(), f"REV-{inv_no}",
+                     f"Reversal of {inv_no}", reverse_lines)
+        return True
+    # Fallback: manual reversal
+    if not inv:
+        return False
+    subtotal = inv.get('subtotal', 0)
+    discount = inv.get('discount', 0)
+    tax_amount = inv.get('tax_amount', 0)
+    total = inv.get('total', 0)
+    total_cost = inv.get('total_cost', 0)
+    payment = inv.get('payment', 'Cash')
+    cash_acct = '1000' if payment == 'Cash' else ('1010' if payment == 'Card' else '1200')
+    lines = [
+        {'account': '4000', 'debit': subtotal, 'credit': 0},
+        {'account': '7000', 'debit': 0, 'credit': discount},
+        {'account': '2000', 'debit': tax_amount, 'credit': 0},
+        {'account': cash_acct, 'debit': 0, 'credit': total},
+    ]
+    if total_cost > 0:
+        lines.append({'account': '1300', 'debit': total_cost, 'credit': 0})
+        lines.append({'account': '5000', 'debit': 0, 'credit': total_cost})
+    lines = [l for l in lines if l['debit'] != 0 or l['credit'] != 0]
+    post_journal(datetime.utcnow(), f"REV-{inv_no}",
+                 f"Reversal of {inv_no}", lines)
+    return True
+
+
 def login_required(f):
     @wraps(f)
     def wrap(*args, **kwargs):
@@ -573,7 +613,9 @@ def delete_invoice(inv_id):
         flash('Invoice not found')
         return redirect(url_for('invoices_list'))
 
-    # Stock restore (qty එකට අනුව)
+    inv_no = inv.get('invoice_no', '')
+
+    # Stock restore
     for it in inv.get('items', []):
         if it.get('item_id'):
             try:
@@ -582,37 +624,11 @@ def delete_invoice(inv_id):
             except Exception:
                 pass
 
-    # Full double-entry reversal
-    subtotal = inv.get('subtotal', 0)
-    discount = inv.get('discount', 0)
-    tax_amount = inv.get('tax_amount', 0)
-    total = inv.get('total', 0)
-    total_cost = inv.get('total_cost', 0)
-    payment = inv.get('payment', 'Cash')
-
-    if payment == 'Cash':
-        cash_acct = '1000'
-    elif payment == 'Card':
-        cash_acct = '1010'
-    else:
-        cash_acct = '1200'
-
-    lines = [
-        {'account': '4000', 'debit': subtotal, 'credit': 0},
-        {'account': '7000', 'debit': 0, 'credit': discount},
-        {'account': '2000', 'debit': tax_amount, 'credit': 0},
-        {'account': cash_acct, 'debit': 0, 'credit': total},
-    ]
-    if total_cost > 0:
-        lines.append({'account': '1300', 'debit': total_cost, 'credit': 0})
-        lines.append({'account': '5000', 'debit': 0, 'credit': total_cost})
-    lines = [l for l in lines if l['debit'] != 0 or l['credit'] != 0]
-
-    post_journal(datetime.utcnow(), f"REV-{inv['invoice_no']}",
-                 f"Reversal of {inv['invoice_no']}", lines)
+    # Journal reversal (original entry හොයලා, නැත්නම් manual)
+    reverse_journal(inv_no, inv)
 
     invoices_col.delete_one({'_id': ObjectId(inv_id)})
-    flash(f"Invoice {inv['invoice_no']} deleted and stock restored")
+    flash(f"Invoice {inv_no} deleted and stock restored")
     return redirect(url_for('invoices_list'))
 
 
@@ -631,6 +647,8 @@ def delete_test_invoices():
             if not inv:
                 continue
 
+            inv_no = inv.get('invoice_no', '')
+
             for it in inv.get('items', []):
                 if it.get('item_id'):
                     try:
@@ -639,28 +657,7 @@ def delete_test_invoices():
                     except Exception:
                         pass
 
-            subtotal = inv.get('subtotal', 0)
-            discount = inv.get('discount', 0)
-            tax_amount = inv.get('tax_amount', 0)
-            total = inv.get('total', 0)
-            total_cost = inv.get('total_cost', 0)
-            payment = inv.get('payment', 'Cash')
-            cash_acct = '1000' if payment == 'Cash' else ('1010' if payment == 'Card' else '1200')
-
-            lines = [
-                {'account': '4000', 'debit': subtotal, 'credit': 0},
-                {'account': '7000', 'debit': 0, 'credit': discount},
-                {'account': '2000', 'debit': tax_amount, 'credit': 0},
-                {'account': cash_acct, 'debit': 0, 'credit': total},
-            ]
-            if total_cost > 0:
-                lines.append({'account': '1300', 'debit': total_cost, 'credit': 0})
-                lines.append({'account': '5000', 'debit': 0, 'credit': total_cost})
-            lines = [l for l in lines if l['debit'] != 0 or l['credit'] != 0]
-
-            post_journal(datetime.utcnow(), f"REV-{inv['invoice_no']}",
-                         f"Reversal of {inv['invoice_no']}", lines)
-
+            reverse_journal(inv_no, inv)
             invoices_col.delete_one({'_id': ObjectId(iid)})
             count += 1
         except Exception:
